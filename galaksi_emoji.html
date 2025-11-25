@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaksi Emoji Haritası</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            font-size: 24px;
+            font-family: monospace;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="ui-layer">
+        <h1>GALAKSİ EMOJİ HARİTASI</h1>
+        <p>Bir gezegene tıkla ve roketini fırlat! 🚀</p>
+    </div>
+    <div id="loading">Sistemler Hazırlanıyor...</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Game Data with Emojis
+        const games = [
+            { id: 'ciftcilik_seti', name: 'Çiftçilik Seti', icon: '🚜', color: 0x4caf50 },
+            { id: 'cizzz_devre', name: 'Cizzz Devre', icon: '⚡', color: 0xffeb3b },
+            { id: 'clicker_oyunu', name: 'Clicker Oyunu', icon: '👆', color: 0x2196f3 },
+            { id: 'fil_robot', name: 'Fil Robot', icon: '🐘', color: 0x9c27b0 },
+            { id: 'gemi_oyunu', name: 'Gemi Oyunu', icon: '🚢', color: 0x03a9f4 },
+            { id: 'gunes_ucak', name: 'Güneş Uçak', icon: '✈️', color: 0xff9800 },
+            { id: 'hidrolik_kepce', name: 'Hidrolik Kepçe', icon: '🏗️', color: 0xff5722 },
+            { id: 'iha_maketi', name: 'İHA Maketi', icon: '🚁', color: 0x607d8b },
+            { id: 'labirent_makinesi', name: 'Labirent Makinesi', icon: '🌀', color: 0x795548 },
+            { id: 'ledli_alarm', name: 'Ledli Alarm', icon: '🚨', color: 0xf44336 },
+            { id: 'ledli_gemi', name: 'Ledli Gemi', icon: '⛵', color: 0x00bcd4 },
+            { id: 'magic_window', name: 'Sihirli Pencere', icon: '🪟', color: 0x9c27b0 },
+            { id: 'mancinik_oyunu', name: 'Mancınık Oyunu', icon: '🏰', color: 0x8d6e63 },
+            { id: 'mekanik_girgir', name: 'Mekanik Gırgır', icon: '🧹', color: 0x009688 },
+            { id: 'misket_robot', name: 'Misket Robot', icon: '🎱', color: 0x3f51b5 },
+            { id: 'ok_oyunu', name: 'Ok Oyunu', icon: '🏹', color: 0x8bc34a },
+            { id: 'rpg', name: 'RPG Oyunu', icon: '⚔️', color: 0xe91e63 },
+            { id: 'sepetli_robot', name: 'Sepetli Robot', icon: '🗑️', color: 0xffc107 },
+            { id: 'tank2', name: 'Tank Savaşı', icon: '🛡️', color: 0x4caf50 },
+            { id: 'tank_oyunu', name: 'Tank Oyunu', icon: '💣', color: 0x8bc34a },
+            { id: 'telgraf_modeli', name: 'Telgraf Modeli', icon: '📠', color: 0x607d8b },
+            { id: 'tren_oyunu', name: 'Tren Oyunu', icon: '🚂', color: 0xff5722 },
+            { id: 'uzay2', name: 'Uzay Savaşı 2', icon: '🚀', color: 0x3f51b5 },
+            { id: 'uzay_oyunu', name: 'Uzay Oyunu', icon: '🌌', color: 0x2196f3 },
+            { id: 'uçak_oyunu', name: 'Uçak Oyunu', icon: '🛫', color: 0x03a9f4 },
+            { id: 'yuruyen_robot', name: 'Yürüyen Robot', icon: '🚶', color: 0x9c27b0 }
+        ];
+
+        let camera, scene, renderer, controls;
+        let raycaster, mouse;
+        const planets = [];
+        let rocket;
+        let targetPlanet = null;
+        let isFlying = false;
+
+        init();
+        animate();
+
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.FogExp2(0x050510, 0.002);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 100, 200);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 400;
+            controls.minDistance = 50;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.5;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
+            sunLight.position.set(0, 0, 0);
+            scene.add(sunLight);
+
+            // Sun (Center)
+            const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sun);
+
+            // Sun Glow
+            const sunGlowGeo = new THREE.SphereGeometry(22, 32, 32);
+            const sunGlowMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.3, side: THREE.BackSide });
+            const sunGlow = new THREE.Mesh(sunGlowGeo, sunGlowMat);
+            scene.add(sunGlow);
+
+            // Starfield
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 });
+            const starVertices = [];
+            for (let i = 0; i < 5000; i++) {
+                const x = (Math.random() - 0.5) * 1000;
+                const y = (Math.random() - 0.5) * 1000;
+                const z = (Math.random() - 0.5) * 1000;
+                starVertices.push(x, y, z);
+            }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+
+            // Planets
+            const spiralRadius = 10;
+            games.forEach((game, index) => {
+                const angle = index * 0.8; // Spiral angle
+                const distance = 40 + (index * 6); // Increasing distance
+
+                const x = Math.cos(angle) * distance;
+                const z = Math.sin(angle) * distance;
+                const y = (Math.random() - 0.5) * 20; // Slight vertical variation
+
+                // Planet Mesh
+                const geometry = new THREE.SphereGeometry(4, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: game.color,
+                    roughness: 0.7,
+                    metalness: 0.3
+                });
+                const planet = new THREE.Mesh(geometry, material);
+                planet.position.set(x, y, z);
+                planet.userData = { id: game.id, name: game.name, originalY: y };
+
+                // Ring for some planets
+                if (Math.random() > 0.7) {
+                    const ringGeo = new THREE.RingGeometry(5, 7, 32);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.4 });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.PI / 2 + (Math.random() * 0.5);
+                    planet.add(ring);
+                }
+
+                // Emoji Sprite
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                ctx.font = '100px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(game.icon, 64, 64);
+
+                const emojiTexture = new THREE.CanvasTexture(canvas);
+                const emojiMaterial = new THREE.SpriteMaterial({ map: emojiTexture });
+                const emojiSprite = new THREE.Sprite(emojiMaterial);
+                emojiSprite.position.y = 8; // Float above planet
+                emojiSprite.scale.set(10, 10, 1);
+                planet.add(emojiSprite);
+
+                // Name Label (Smaller, below emoji)
+                const labelCanvas = document.createElement('canvas');
+                labelCanvas.width = 256;
+                labelCanvas.height = 64;
+                const labelCtx = labelCanvas.getContext('2d');
+                labelCtx.fillStyle = 'rgba(0,0,0,0.6)';
+                labelCtx.fillRect(0, 0, 256, 64);
+                labelCtx.fillStyle = 'white';
+                labelCtx.font = 'bold 24px Arial';
+                labelCtx.textAlign = 'center';
+                labelCtx.textBaseline = 'middle';
+                labelCtx.fillText(game.name, 128, 32);
+
+                const labelTexture = new THREE.CanvasTexture(labelCanvas);
+                const labelMaterial = new THREE.SpriteMaterial({ map: labelTexture });
+                const label = new THREE.Sprite(labelMaterial);
+                label.position.y = -6; // Below planet
+                label.scale.set(16, 4, 1);
+                planet.add(label);
+
+                scene.add(planet);
+                planets.push(planet);
+            });
+
+            // Rocket
+            const rocketGroup = new THREE.Group();
+
+            // Body
+            const bodyGeo = new THREE.ConeGeometry(1, 4, 8);
+            bodyGeo.rotateX(Math.PI / 2);
+            const bodyMat = new THREE.MeshNormalMaterial();
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            rocketGroup.add(body);
+
+            // Flame
+            const flameGeo = new THREE.ConeGeometry(0.5, 2, 8);
+            flameGeo.rotateX(-Math.PI / 2);
+            const flameMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+            const flame = new THREE.Mesh(flameGeo, flameMat);
+            flame.position.z = -2.5;
+            rocketGroup.add(flame);
+
+            rocket = rocketGroup;
+            scene.add(rocket);
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Events
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('click', onClick);
+
+            // Remove loading text
+            document.getElementById('loading').style.opacity = 0;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onClick() {
+            if (isFlying) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(planets);
+
+            if (intersects.length > 0) {
+                targetPlanet = intersects[0].object;
+                isFlying = true;
+                controls.autoRotate = false;
+
+                // Highlight planet
+                targetPlanet.material.emissive.setHex(0x555555);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            const time = Date.now() * 0.001;
+
+            // Animate Planets
+            planets.forEach((planet, i) => {
+                planet.rotation.y += 0.01;
+                planet.position.y = planet.userData.originalY + Math.sin(time + i) * 2;
+            });
+
+            // Rocket Logic
+            if (isFlying && targetPlanet) {
+                const targetPos = targetPlanet.position.clone();
+                // Stop slightly before the planet
+                const direction = targetPos.clone().sub(rocket.position).normalize();
+                const distance = rocket.position.distanceTo(targetPos);
+
+                // Rotate rocket to face target
+                rocket.lookAt(targetPos);
+
+                if (distance > 5) {
+                    rocket.position.add(direction.multiplyScalar(2)); // Speed
+                } else {
+                    // Arrived
+                    window.location.href = `./${targetPlanet.userData.id}/index.html`;
+                    isFlying = false;
+                }
+            } else {
+                // Idle rocket animation (orbiting sun close)
+                rocket.position.x = Math.cos(time) * 25;
+                rocket.position.z = Math.sin(time) * 25;
+                rocket.lookAt(rocket.position.clone().add(new THREE.Vector3(-Math.sin(time), 0, Math.cos(time))));
+            }
+
+            // Raycast for hover effect
+            if (!isFlying) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(planets);
+
+                document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+
+                planets.forEach(p => p.material.emissive.setHex(0x000000));
+                if (intersects.length > 0) {
+                    intersects[0].object.material.emissive.setHex(0x333333);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

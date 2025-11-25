@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Ahşap Misket Robotu Simülasyonu</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-family: sans-serif;
+            color: #333;
+            pointer-events: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">Misket Robotu - Three.js Otomata Simülasyonu</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // 1. SAHNE KURULUMU
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        // Sis ekleyerek derinlik katalım
+        scene.fog = new THREE.Fog(0xffffff, 20, 100);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(20, 15, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // Gölgeleri aç
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 2. IŞIKLANDIRMA
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // 3. MATERYALLER (Ahşap Görünümü)
+        const woodMaterial = new THREE.MeshStandardMaterial({
+            color: 0xD2B48C, // Tan / Açık Ahşap Rengi
+            roughness: 0.7,
+            metalness: 0.1
+        });
+
+        const darkWoodMaterial = new THREE.MeshStandardMaterial({
+            color: 0x5D4037, // Koyu kahve (Lazer yanığı kenarlar için)
+            roughness: 0.9
+        });
+
+        const plasticBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4 }); // Pil kutusu
+        const marbleMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x00ffcc,
+            metalness: 0.1,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.8,
+            transmission: 0.5 // Cam gibi
+        });
+
+        // 4. MEKANİZMA PARÇALARI
+
+        // Grup oluştur
+        const machineGroup = new THREE.Group();
+        scene.add(machineGroup);
+
+        // Taban (Base)
+        const baseGeo = new THREE.BoxGeometry(20, 0.5, 10);
+        const base = new THREE.Mesh(baseGeo, woodMaterial);
+        base.position.y = -0.25;
+        base.receiveShadow = true;
+        machineGroup.add(base);
+
+        // Yan Duvarlar
+        const wallGeo = new THREE.BoxGeometry(0.5, 8, 8);
+        const leftWall = new THREE.Mesh(wallGeo, woodMaterial);
+        leftWall.position.set(-9, 4, 0);
+        leftWall.castShadow = true;
+        leftWall.receiveShadow = true;
+        machineGroup.add(leftWall);
+
+        const rightWall = new THREE.Mesh(wallGeo, woodMaterial);
+        rightWall.position.set(9, 4, 0);
+        rightWall.castShadow = true;
+        machineGroup.add(rightWall);
+
+        // Ana Mil (Shaft)
+        const shaftGeo = new THREE.CylinderGeometry(0.4, 0.4, 18, 32);
+        const shaft = new THREE.Mesh(shaftGeo, darkWoodMaterial);
+        shaft.rotation.z = Math.PI / 2;
+        shaft.position.set(0, 2.5, 0);
+        shaft.castShadow = true;
+        machineGroup.add(shaft);
+
+        // PİL KUTUSU (Sağ alt)
+        const batteryGeo = new THREE.BoxGeometry(4, 1.5, 3);
+        const batteryBox = new THREE.Mesh(batteryGeo, plasticBlack);
+        batteryBox.position.set(6, 0.75, 2);
+        batteryBox.castShadow = true;
+        machineGroup.add(batteryBox);
+
+        // KABLOLAR (Basit çizgi)
+        // (Burada detay için curve kullanılabilir ama basit tutuyoruz)
+
+        // PİSTONLAR VE KAMLAR (Lifting Mechanism)
+        const numSteps = 8;
+        const stepWidth = 1.2;
+        const startX = -6;
+        const cams = [];
+        const lifters = [];
+
+        for (let i = 0; i < numSteps; i++) {
+            const xPos = startX + (i * (stepWidth * 1.5));
+
+            // Kam (Dönen eksantrik parça)
+            const camGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.4, 32);
+            const cam = new THREE.Mesh(camGeo, darkWoodMaterial);
+            // Kamı milin üzerine yerleştir ama merkezini kaçık yap (Eccentric)
+            cam.position.set(xPos, 2.5, 0);
+            cam.rotation.z = Math.PI / 2;
+
+            // Her kamın açısını biraz kaydırarak dalga hareketi oluştur
+            // Görseldeki gibi sarmal bir dizilim
+            cam.userData = { offset: i * 0.8 };
+
+            machineGroup.add(cam);
+            cams.push(cam);
+
+            // Piston/Basamak (Lifter)
+            // Görseldeki gibi "T" veya "L" şeklinde değil, dikey plaka olarak yapalım
+            const lifterGeo = new THREE.BoxGeometry(1, 4.5, 0.5);
+            const lifter = new THREE.Mesh(lifterGeo, woodMaterial);
+            lifter.position.set(xPos, 5.5, 0);
+            lifter.castShadow = true;
+            lifter.receiveShadow = true;
+
+            // Üst kısımdaki eğim (Misketin yuvarlanması için)
+            // Basitçe üstüne küçük bir rampa ekleyelim
+            const topRampGeo = new THREE.BoxGeometry(1.2, 0.2, 3);
+            const topRamp = new THREE.Mesh(topRampGeo, woodMaterial);
+            topRamp.position.y = 2.3;
+            topRamp.rotation.x = 0.1; // Hafif eğim
+            lifter.add(topRamp);
+
+            machineGroup.add(lifter);
+            lifters.push(lifter);
+        }
+
+        // Üst Rampa (Geri dönüş yolu - Sabit kısım)
+        const returnRampGeo = new THREE.BoxGeometry(16, 0.2, 1.5);
+        const returnRamp = new THREE.Mesh(returnRampGeo, woodMaterial);
+        returnRamp.position.set(0, 6, -1.5);
+        returnRamp.rotation.z = -0.05; // Sağa doğru eğim
+        returnRamp.castShadow = true;
+        // machineGroup.add(returnRamp); // Görselde tam arkada görünmüyor ama mantıken olmalı, şimdilik gizli
+
+        // MİSKET (Marble)
+        const marbleGeo = new THREE.SphereGeometry(0.4, 32, 32);
+        const marble = new THREE.Mesh(marbleGeo, marbleMaterial);
+        marble.castShadow = true;
+        machineGroup.add(marble);
+
+        // Yüz İfadesi (Sağ üstteki dekor)
+        const faceGroup = new THREE.Group();
+        const facePlate = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 0.2), woodMaterial);
+        const eyeGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.3);
+        const eye1 = new THREE.Mesh(eyeGeo, plasticBlack);
+        const eye2 = new THREE.Mesh(eyeGeo, plasticBlack);
+        eye1.rotation.x = Math.PI / 2; eye1.position.set(-0.5, 0.2, 0.1);
+        eye2.rotation.x = Math.PI / 2; eye2.position.set(0.5, 0.2, 0.1);
+
+        // Gülümseme (Torus parçasından)
+        const smileGeo = new THREE.TorusGeometry(0.5, 0.1, 16, 100, Math.PI);
+        const smile = new THREE.Mesh(smileGeo, plasticBlack);
+        smile.position.set(0, -0.2, 0.15);
+
+        faceGroup.add(facePlate, eye1, eye2, smile);
+        faceGroup.position.set(9, 7, 0.5);
+        faceGroup.rotation.y = -Math.PI / 4;
+        machineGroup.add(faceGroup);
+
+
+        // 5. ANİMASYON DÖNGÜSÜ
+        let time = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            time += 0.05;
+
+            // 1. Mili Döndür
+            shaft.rotation.x = time;
+
+            // 2. Kamları ve Pistonları Hareket Ettir
+            for (let i = 0; i < numSteps; i++) {
+                const cam = cams[i];
+                const lifter = lifters[i];
+
+                // Kam kendi ekseninde dönüyormuş gibi (görsel hile)
+                cam.rotation.x = time;
+
+                // Piston hareketi: Sinüs dalgası
+                // Görseldeki mekanizma: Kam yumurtamsı olduğu için pistonu yukarı iter
+                // Math.abs(Math.sin) kullanarak sadece yukarı itme efekti verelim veya offsetli sinüs
+                const liftAmount = Math.sin(time + cam.userData.offset);
+
+                // Pistonun Y pozisyonunu güncelle
+                // Taban seviyesi (4.5) + Hareket
+                lifter.position.y = 4.5 + (liftAmount * 0.8);
+
+                // Kamın da görsel olarak pistonla temas ediyormuş gibi görünmesi için hafif pozisyon değişimi (opsiyonel)
+                cam.position.y = 2.5 + (liftAmount * 0.2);
+            }
+
+            // 3. Misket Hareketi (Basit Simülasyon)
+            // Misket basamakların üzerinde zıplayarak ilerliyormuş gibi yapalım
+            const marbleSpeed = 0.5;
+            const marblePathLength = numSteps * 1.5; // Toplam mesafe
+            // Modulo ile döngü
+            const marbleProgress = (time * marbleSpeed) % (numSteps + 2);
+
+            if (marbleProgress < numSteps) {
+                // Basamakların üzerindeyken
+                const currentIndex = Math.floor(marbleProgress);
+                const currentLifter = lifters[currentIndex];
+
+                if (currentLifter) {
+                    marble.position.x = currentLifter.position.x;
+                    // Misket pistonun tepesinde
+                    marble.position.y = currentLifter.position.y + 2.5;
+                    marble.position.z = 0;
+                }
+            } else {
+                // Sona geldiğinde başa ışınlanma (döngüsel animasyon için)
+                // Normalde rampa ile dönerdi
+                marble.position.set(startX, 6, 0);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Pencere boyutu değişince güncelle
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

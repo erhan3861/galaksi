@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cızzz Devre - Dikkat Oyunu</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #f0f8ff, #e6e6fa);
+            user-select: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .lives-container {
+            font-size: 40px;
+            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .timer {
+            font-size: 30px;
+            color: #333;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 25px;
+            border-radius: 25px;
+            border: 3px solid #333;
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        #start-screen,
+        #game-over-screen,
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .big-btn {
+            background: #FF4500;
+            color: white;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            border-radius: 60px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            margin-top: 30px;
+            box-shadow: 0 8px 0 #8B0000;
+            transition: transform 0.1s;
+            text-transform: uppercase;
+        }
+
+        .big-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #8B0000;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #flash-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+            z-index: 50;
+        }
+
+        .instruction-box {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 30px;
+            border-radius: 20px;
+            font-size: 24px;
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 3px solid #FF4500;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "canvas-confetti": "https://cdn.skypack.dev/canvas-confetti"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="game-container"></div>
+    <div id="flash-overlay"></div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <div class="lives-container" id="lives">❤️❤️❤️</div>
+            <div class="timer" id="timer">00:00</div>
+        </div>
+        <div style="display: flex; justify-content: center;">
+            <div class="instruction-box">
+                🖱️ Fareyi sağa kaydır, yukarı-aşağı dengede tut! ⚡
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1
+            style="font-size: 6rem; margin: 0; color: #FF4500; text-shadow: 4px 4px 0 #fff; -webkit-text-stroke: 2px white;">
+            CIZZZ DEVRE</h1>
+        <p style="font-size: 2rem; margin-top: 10px;">Dikkatli ol, elin titremesin! 😱</p>
+        <button class="big-btn" id="start-btn">BAŞLA ▶</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 style="font-size: 5rem; color: #FF6B6B; text-shadow: 3px 3px 0 #fff;">YANDIN! ⚡</h1>
+        <button class="big-btn" id="restart-btn">TEKRAR DENE ↺</button>
+    </div>
+
+    <div id="win-screen" class="hidden">
+        <h1 style="font-size: 5rem; color: #32CD32; text-shadow: 3px 3px 0 #fff;">TEBRİKLER! 🎉</h1>
+        <p style="font-size: 2rem;">Süre: <span id="final-time">00:00</span></p>
+        <button class="big-btn" id="win-restart-btn">TEKRAR OYNA ↺</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import confetti from 'canvas-confetti';
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer;
+        let wireMesh, handleMesh, loopMesh;
+        let curve;
+        let progress = 0;
+        let lives = 3;
+        let startTime;
+        let isGameActive = false;
+        let isTouching = false;
+        let sparks = [];
+
+        // Input
+        const mouse = new THREE.Vector2();
+        let targetProgress = 0;
+
+        init();
+        animate();
+
+        function init() {
+            // 1. SCENE
+            scene = new THREE.Scene();
+            // scene.background = new THREE.Color(0xf0f8ff); // Use CSS gradient
+            scene.fog = new THREE.Fog(0xf0f8ff, 20, 50);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 15);
+            camera.lookAt(0, 2, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // LIGHTS
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 10, 5);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 2. OBJECTS
+            createEnvironment();
+            createWire();
+            createHandle();
+
+            // 3. EVENTS
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+            document.getElementById('win-restart-btn').addEventListener('click', restartGame);
+        }
+
+        function createEnvironment() {
+            // Table/Base
+            const geo = new THREE.BoxGeometry(20, 1, 10);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xDEB887, roughness: 0.8 });
+            const base = new THREE.Mesh(geo, mat);
+            base.position.y = -0.5;
+            base.receiveShadow = true;
+            scene.add(base);
+        }
+
+        function createWire() {
+            // Create a complex 3D curve
+            curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-8, 0, 0),
+                new THREE.Vector3(-6, 2, 2),
+                new THREE.Vector3(-3, 4, -2),
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(3, 3, 2),
+                new THREE.Vector3(6, 2, -1),
+                new THREE.Vector3(8, 0, 0)
+            ]);
+
+            const tubeGeo = new THREE.TubeGeometry(curve, 100, 0.1, 8, false);
+            const tubeMat = new THREE.MeshStandardMaterial({
+                color: 0xC0C0C0,
+                metalness: 0.9,
+                roughness: 0.2
+            });
+            wireMesh = new THREE.Mesh(tubeGeo, tubeMat);
+            wireMesh.castShadow = true;
+            scene.add(wireMesh);
+
+            // Start/End posts
+            const postGeo = new THREE.CylinderGeometry(0.2, 0.2, 2);
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x333 });
+
+            const startPost = new THREE.Mesh(postGeo, postMat);
+            startPost.position.set(-8, 1, 0);
+            scene.add(startPost);
+
+            const endPost = new THREE.Mesh(postGeo, postMat);
+            endPost.position.set(8, 1, 0);
+            scene.add(endPost);
+        }
+
+        function createHandle() {
+            const handleGroup = new THREE.Group();
+
+            // Wooden Handle
+            const handleGeo = new THREE.CylinderGeometry(0.3, 0.3, 2);
+            const handleMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const handle = new THREE.Mesh(handleGeo, handleMat);
+            handle.position.y = -1.5;
+            handleGroup.add(handle);
+
+            // Metal Rod connecting handle to loop
+            const rodGeo = new THREE.CylinderGeometry(0.05, 0.05, 1);
+            const rodMat = new THREE.MeshStandardMaterial({ color: 0x888 });
+            const rod = new THREE.Mesh(rodGeo, rodMat);
+            rod.position.y = -0.5;
+            handleGroup.add(rod);
+
+            // The Loop (Torus)
+            // Loop radius 0.5, Tube radius 0.05
+            const loopGeo = new THREE.TorusGeometry(0.5, 0.05, 16, 32);
+            const loopMat = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+            loopMesh = new THREE.Mesh(loopGeo, loopMat);
+            // Rotate loop to be perpendicular to wire initially
+            loopMesh.rotation.y = Math.PI / 2;
+            handleGroup.add(loopMesh);
+
+            handleMesh = handleGroup;
+            scene.add(handleMesh);
+        }
+
+        function createSpark(position) {
+            const sparkGeo = new THREE.BufferGeometry();
+            const sparkCount = 10;
+            const positions = new Float32Array(sparkCount * 3);
+            const velocities = [];
+
+            for (let i = 0; i < sparkCount; i++) {
+                positions[i * 3] = position.x;
+                positions[i * 3 + 1] = position.y;
+                positions[i * 3 + 2] = position.z;
+                velocities.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2
+                ));
+            }
+            sparkGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const sparkMat = new THREE.PointsMaterial({ color: 0xFFFF00, size: 0.1 });
+            const sparkSystem = new THREE.Points(sparkGeo, sparkMat);
+            scene.add(sparkSystem);
+
+            sparks.push({ mesh: sparkSystem, velocities: velocities, age: 0 });
+        }
+
+        function onMouseMove(event) {
+            if (!isGameActive) return;
+            const x = event.clientX / window.innerWidth;
+            targetProgress = Math.max(0, Math.min(1, x));
+
+            // Update mouse Y for steadiness
+            // Map 0..1 to -1..1
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onTouchMove(event) {
+            if (!isGameActive) return;
+            event.preventDefault();
+            const x = event.touches[0].clientX / window.innerWidth;
+            targetProgress = Math.max(0, Math.min(1, x));
+
+            const y = event.touches[0].clientY / window.innerHeight;
+            mouse.y = -(y * 2) + 1;
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.add('hidden');
+
+            isGameActive = true;
+            lives = 3;
+            progress = 0;
+            targetProgress = 0;
+            startTime = Date.now();
+            updateLives();
+
+            // Reset Handle
+            updateHandlePosition();
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function updateLives() {
+            let s = "";
+            for (let i = 0; i < lives; i++) s += "❤️";
+            document.getElementById('lives').innerText = s;
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const s = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${m}:${s}`;
+            return `${m}:${s}`;
+        }
+
+        function fail() {
+            lives--;
+            updateLives();
+            playSound('buzz');
+            createSpark(handleMesh.position);
+
+            // Flash screen
+            const overlay = document.getElementById('flash-overlay');
+            overlay.style.opacity = 0.5;
+            setTimeout(() => overlay.style.opacity = 0, 100);
+
+            if (lives <= 0) {
+                isGameActive = false;
+                playSound('fail');
+                document.getElementById('game-over-screen').classList.remove('hidden');
+            }
+        }
+
+        function win() {
+            isGameActive = false;
+            const timeStr = updateTimer();
+            document.getElementById('final-time').innerText = timeStr;
+            document.getElementById('win-screen').classList.remove('hidden');
+            playSound('win');
+            confetti();
+        }
+
+        function playSound(type) {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            if (type === 'buzz') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+                osc.start(); osc.stop(ctx.currentTime + 0.2);
+            } else if (type === 'win') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            } else if (type === 'fail') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(200, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            }
+        }
+
+        function updateHandlePosition() {
+            // Smoothly interpolate progress
+            progress += (targetProgress - progress) * 0.1;
+
+            // Get position and tangent on curve
+            const pos = curve.getPointAt(progress);
+
+            // We don't need tangent for position, but maybe for rotation if we wanted to align it.
+            // Keeping handle vertical is fine.
+
+            handleMesh.position.copy(pos);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameActive) {
+                updateTimer();
+
+                // Input Logic with Jitter/Offset
+                progress += (targetProgress - progress) * 0.05;
+
+                // Calculate position on curve
+                const pointOnCurve = curve.getPointAt(progress);
+
+                // Mouse Y controls vertical offset
+                const yOffset = mouse.y * 2; // -2 to +2 units
+
+                // Actual handle position
+                handleMesh.position.copy(pointOnCurve);
+                handleMesh.position.y += yOffset;
+
+                // Collision Check
+                // Distance from Handle Center (Loop Center) to Nearest Point on Curve
+                // Since we set X based on curve, the nearest point is roughly pointOnCurve.
+                // Distance is roughly yOffset.
+                // Wire radius 0.1, Loop inner radius ~0.45.
+                // Safe zone is +/- (0.45 - 0.1) = +/- 0.35.
+
+                if (Math.abs(yOffset) > 0.35) {
+                    if (!isTouching) {
+                        isTouching = true;
+                        fail();
+                        loopMesh.material.color.setHex(0xFF0000);
+                    }
+                } else {
+                    if (isTouching) {
+                        isTouching = false;
+                        loopMesh.material.color.setHex(0xFFD700);
+                    }
+                }
+
+                // Win Condition
+                if (progress > 0.99) {
+                    win();
+                }
+            }
+
+            // Update Sparks
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                const s = sparks[i];
+                s.age++;
+                const positions = s.mesh.geometry.attributes.position.array;
+                for (let j = 0; j < s.velocities.length; j++) {
+                    positions[j * 3] += s.velocities[j].x;
+                    positions[j * 3 + 1] += s.velocities[j].y;
+                    positions[j * 3 + 2] += s.velocities[j].z;
+                }
+                s.mesh.geometry.attributes.position.needsUpdate = true;
+                s.mesh.material.opacity = 1 - (s.age / 30);
+                if (s.age > 30) {
+                    scene.remove(s.mesh);
+                    sparks.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

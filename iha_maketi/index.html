@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>İHA Maketi - Gece Arama</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #050505;
+            user-select: none;
+            touch-action: none;
+            /* Prevent scroll */
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: center;
+        }
+
+        .score-board {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 30px;
+            border-radius: 30px;
+            border: 2px solid #FFD700;
+            color: #FFD700;
+            font-size: 24px;
+            text-shadow: 0 0 10px #FFD700;
+            backdrop-filter: blur(5px);
+        }
+
+        #joystick-zone {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 215, 0, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            pointer-events: none;
+        }
+
+        #start-screen,
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .big-btn {
+            background: #FFD700;
+            color: #333;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            border-radius: 60px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            margin-top: 30px;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            transition: transform 0.1s;
+            font-weight: bold;
+        }
+
+        .big-btn:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #radar-hint {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 16px;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "canvas-confetti": "https://cdn.skypack.dev/canvas-confetti"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="game-container"></div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <div class="score-board">⭐ Yıldızlar: <span id="score">0</span>/5</div>
+        </div>
+        <div id="radar-hint">Ok yönünü takip et! ⬆️</div>
+
+        <div id="joystick-zone">
+            <div id="joystick-knob"></div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1 style="font-size: 4rem; margin: 0; color: #FFD700; text-shadow: 0 0 20px #FFD700;">Gece Araması</h1>
+        <p style="font-size: 1.5rem;">Karanlıkta kaybolan yıldızları bul!</p>
+        <button class="big-btn" id="start-btn">BAŞLA ▶</button>
+    </div>
+
+    <div id="win-screen" class="hidden">
+        <h1 style="font-size: 5rem; color: #FFD700;">GÖREV TAMAM!</h1>
+        <p style="font-size: 2rem;">Bütün yıldızları buldun.</p>
+        <button class="big-btn" id="restart-btn">TEKRAR OYNA ↺</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import confetti from 'canvas-confetti';
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer;
+        let uavGroup, radarArrow;
+        let spotlight;
+        let stars = [];
+        let score = 0;
+        const totalStars = 5;
+        let isGameActive = false;
+        let props = [];
+
+        // Input
+        const joystick = { x: 0, y: 0 };
+        const uavPos = new THREE.Vector3(0, 5, 0);
+        const uavVel = new THREE.Vector3(0, 0, 0);
+
+        init();
+        animate();
+
+        function init() {
+            // 1. SCENE
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.FogExp2(0x020205, 0.03);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 25, 10);
+            camera.lookAt(0, 0, 5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // LIGHTS
+            const ambientLight = new THREE.AmbientLight(0x111111);
+            scene.add(ambientLight);
+
+            // Moon Light (Dim directional)
+            const moonLight = new THREE.DirectionalLight(0x444466, 0.5);
+            moonLight.position.set(20, 50, -20);
+            scene.add(moonLight);
+
+            // 2. OBJECTS
+            createGround();
+            createUAV();
+            spawnStars();
+
+            // 3. EVENTS
+            window.addEventListener('resize', onWindowResize);
+            setupJoystick();
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+        }
+
+        function createGround() {
+            const geo = new THREE.PlaneGeometry(200, 200);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            // Trees (Low poly cones)
+            const treeGeo = new THREE.ConeGeometry(1.5, 4, 8);
+            const treeMat = new THREE.MeshStandardMaterial({ color: 0x0a2a0a, roughness: 1 });
+
+            for (let i = 0; i < 50; i++) {
+                const tree = new THREE.Mesh(treeGeo, treeMat);
+                const x = (Math.random() - 0.5) * 80;
+                const z = (Math.random() - 0.5) * 80;
+                if (Math.abs(x) < 5 && Math.abs(z) < 5) continue; // Clear center
+
+                tree.position.set(x, 2, z);
+                tree.castShadow = true;
+                tree.receiveShadow = true;
+                scene.add(tree);
+            }
+        }
+
+        function createUAV() {
+            uavGroup = new THREE.Group();
+            scene.add(uavGroup);
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.5 });
+            const armMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const propMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+            // Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.5), bodyMat);
+            uavGroup.add(body);
+
+            // Arms (X shape)
+            const arm1 = new THREE.Mesh(new THREE.BoxGeometry(5, 0.2, 0.5), armMat);
+            arm1.rotation.y = Math.PI / 4;
+            uavGroup.add(arm1);
+
+            const arm2 = new THREE.Mesh(new THREE.BoxGeometry(5, 0.2, 0.5), armMat);
+            arm2.rotation.y = -Math.PI / 4;
+            uavGroup.add(arm2);
+
+            // Props
+            const propGeo = new THREE.BoxGeometry(2, 0.05, 0.2);
+            const positions = [
+                { x: 1.8, z: 1.8 }, { x: -1.8, z: -1.8 },
+                { x: 1.8, z: -1.8 }, { x: -1.8, z: 1.8 }
+            ];
+
+            positions.forEach(pos => {
+                const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4), bodyMat);
+                motor.position.set(pos.x, 0.2, pos.z);
+                uavGroup.add(motor);
+
+                const prop = new THREE.Mesh(propGeo, propMat);
+                prop.position.set(0, 0.3, 0);
+                motor.add(prop);
+                props.push(prop);
+            });
+
+            // Spotlight
+            spotlight = new THREE.SpotLight(0xFFFFFF, 100);
+            spotlight.position.set(0, -0.5, 0);
+            spotlight.angle = Math.PI / 5;
+            spotlight.penumbra = 0.3;
+            spotlight.decay = 1.5;
+            spotlight.distance = 40;
+            spotlight.castShadow = true;
+            spotlight.target.position.set(0, -10, 0);
+            uavGroup.add(spotlight);
+            uavGroup.add(spotlight.target);
+
+            // Radar Arrow
+            const arrowGeo = new THREE.ConeGeometry(0.5, 1.5, 4);
+            const arrowMat = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.7 });
+            radarArrow = new THREE.Mesh(arrowGeo, arrowMat);
+            radarArrow.rotation.x = Math.PI / 2; // Flat
+            radarArrow.position.y = 2; // Above drone
+            uavGroup.add(radarArrow);
+        }
+
+        function spawnStars() {
+            const starGeo = new THREE.IcosahedronGeometry(0.8, 0);
+            const starMat = new THREE.MeshStandardMaterial({
+                color: 0xFFD700,
+                emissive: 0x333300,
+                roughness: 0.2,
+                metalness: 0.8
+            });
+
+            for (let i = 0; i < totalStars; i++) {
+                const star = new THREE.Mesh(starGeo, starMat);
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 10 + Math.random() * 30;
+
+                star.position.set(Math.cos(angle) * dist, 1, Math.sin(angle) * dist);
+                star.castShadow = true;
+                star.userData = {
+                    collected: false,
+                    hoverTime: 0,
+                    baseY: 1
+                };
+
+                scene.add(star);
+                stars.push(star);
+            }
+        }
+
+        function setupJoystick() {
+            const zone = document.getElementById('joystick-zone');
+            const knob = document.getElementById('joystick-knob');
+            let dragging = false;
+            let startX, startY;
+
+            const handleStart = (x, y) => {
+                dragging = true;
+                startX = x;
+                startY = y;
+                knob.style.transition = 'none';
+            };
+
+            const handleMove = (x, y) => {
+                if (!dragging) return;
+                const dx = x - startX;
+                const dy = y - startY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = 50;
+
+                const angle = Math.atan2(dy, dx);
+                const clampedDist = Math.min(dist, maxDist);
+
+                const moveX = Math.cos(angle) * clampedDist;
+                const moveY = Math.sin(angle) * clampedDist;
+
+                knob.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+
+                joystick.x = moveX / maxDist;
+                joystick.y = moveY / maxDist;
+            };
+
+            const handleEnd = () => {
+                dragging = false;
+                joystick.x = 0;
+                joystick.y = 0;
+                knob.style.transition = 'transform 0.2s';
+                knob.style.transform = 'translate(-50%, -50%)';
+            };
+
+            zone.addEventListener('mousedown', e => handleStart(e.clientX, e.clientY));
+            window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+            window.addEventListener('mouseup', handleEnd);
+
+            zone.addEventListener('touchstart', e => {
+                e.preventDefault();
+                handleStart(e.touches[0].clientX, e.touches[0].clientY);
+            });
+            window.addEventListener('touchmove', e => {
+                if (dragging) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: false });
+            window.addEventListener('touchend', handleEnd);
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            isGameActive = true;
+            score = 0;
+            document.getElementById('score').innerText = score;
+
+            // Reset
+            uavPos.set(0, 5, 0);
+            uavVel.set(0, 0, 0);
+            uavGroup.position.copy(uavPos);
+            uavGroup.rotation.set(0, 0, 0);
+
+            stars.forEach(s => {
+                s.visible = true;
+                s.userData.collected = false;
+                s.userData.hoverTime = 0;
+                s.position.y = s.userData.baseY;
+                s.scale.setScalar(1);
+            });
+        }
+
+        function restartGame() {
+            location.reload();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameActive) {
+                // Physics Movement
+                const accel = 0.5;
+                const friction = 0.92;
+
+                uavVel.x += joystick.x * accel;
+                uavVel.z += joystick.y * accel;
+                uavVel.multiplyScalar(friction);
+
+                uavPos.add(uavVel);
+
+                // Bounds
+                uavPos.x = Math.max(-90, Math.min(90, uavPos.x));
+                uavPos.z = Math.max(-90, Math.min(90, uavPos.z));
+
+                uavGroup.position.copy(uavPos);
+
+                // Tilt
+                uavGroup.rotation.z = -uavVel.x * 0.1;
+                uavGroup.rotation.x = uavVel.z * 0.1;
+
+                // Props
+                props.forEach(p => p.rotation.y += 0.8);
+
+                // Camera Follow
+                camera.position.x += (uavPos.x - camera.position.x) * 0.1;
+                camera.position.z += (uavPos.z + 15 - camera.position.z) * 0.1;
+                camera.lookAt(uavPos.x, 0, uavPos.z);
+
+                // Radar Logic
+                let nearestStar = null;
+                let minDst = Infinity;
+                stars.forEach(s => {
+                    if (!s.userData.collected) {
+                        const d = uavPos.distanceTo(s.position);
+                        if (d < minDst) {
+                            minDst = d;
+                            nearestStar = s;
+                        }
+                    }
+                });
+
+                if (nearestStar) {
+                    radarArrow.visible = true;
+                    radarArrow.lookAt(nearestStar.position);
+                } else {
+                    radarArrow.visible = false;
+                }
+
+                // Star Logic
+                stars.forEach(star => {
+                    if (star.userData.collected) {
+                        star.position.y += 0.2;
+                        star.rotation.y += 0.1;
+                        if (star.position.y > 10) star.visible = false;
+                        return;
+                    }
+
+                    const dist = new THREE.Vector2(star.position.x, star.position.z)
+                        .distanceTo(new THREE.Vector2(uavPos.x, uavPos.z));
+
+                    if (dist < 4.0) {
+                        star.rotation.y += 0.05;
+                        star.scale.setScalar(1.2 + Math.sin(Date.now() * 0.01) * 0.2);
+                        star.material.emissiveIntensity = 1.0;
+
+                        star.userData.hoverTime += 0.02;
+                        if (star.userData.hoverTime > 1.0) {
+                            star.userData.collected = true;
+                            score++;
+                            document.getElementById('score').innerText = score;
+                            confetti({
+                                particleCount: 50,
+                                spread: 60,
+                                origin: { x: 0.5, y: 0.5 }
+                            });
+
+                            if (score >= totalStars) {
+                                setTimeout(() => {
+                                    document.getElementById('win-screen').classList.remove('hidden');
+                                }, 1500);
+                            }
+                        }
+                    } else {
+                        star.scale.setScalar(1.0);
+                        star.material.emissiveIntensity = 0.1;
+                        star.userData.hoverTime = 0;
+                    }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

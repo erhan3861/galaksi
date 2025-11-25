@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ahşap Tank Görevi</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #87CEEB;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        #score-board {
+            font-size: 32px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 0 #000;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #FFA500;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* Joystick Zone */
+        #joystick-zone {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+        }
+
+        #fire-btn {
+            position: absolute;
+            bottom: 50px;
+            right: 50px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 0, 0, 0.6);
+            border: 4px solid white;
+            border-radius: 50%;
+            pointer-events: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            color: white;
+            user-select: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        #fire-btn:active {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(0.95);
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            pointer-events: auto;
+        }
+
+        .big-btn {
+            background: #8AC926;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-family: 'Fredoka', sans-serif;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "nipplejs": "https://cdn.skypack.dev/nipplejs",
+                "canvas-confetti": "https://cdn.skypack.dev/canvas-confetti"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="ui-container">
+        <div id="top-bar">
+            <h1>🌲 Ahşap Tank Görevi 🌲</h1>
+            <div id="score-board">PUAN: 0</div>
+        </div>
+
+        <div id="joystick-zone"></div>
+        <div id="fire-btn" onpointerdown="fire()">💥</div>
+    </div>
+
+    <div id="game-over">
+        <h1>GÖREV TAMAMLANDI!</h1>
+        <p>Tüm hedefleri vurdun!</p>
+        <button class="big-btn" onclick="location.reload()">Tekrar Oyna 🔁</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import nipplejs from 'nipplejs';
+        import confetti from 'canvas-confetti';
+
+        // --- 1. SAHNE KURULUMU ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Gökyüzü mavisi
+        scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. IŞIKLANDIRMA ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        scene.add(dirLight);
+
+        // --- 3. ZEMİN ---
+        const planeGeometry = new THREE.PlaneGeometry(200, 200);
+        const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x3CB371 }); // Çimen yeşili
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // Trees
+        for (let i = 0; i < 30; i++) {
+            createTree((Math.random() - 0.5) * 150, (Math.random() - 0.5) * 150);
+        }
+
+        function createTree(x, z) {
+            const group = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
+            trunk.position.y = 1;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            const leaves = new THREE.Mesh(new THREE.ConeGeometry(2, 4), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+            leaves.position.y = 3;
+            leaves.castShadow = true;
+            group.add(leaves);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        // --- 4. TANK TASARIMI ---
+        const tankGroup = new THREE.Group();
+
+        // Ahşap Materyali
+        const woodMaterial = new THREE.MeshStandardMaterial({ color: 0xD2B48C, roughness: 0.8 });
+        const darkWoodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Kenarlar için
+
+        // Gövde (Ana Kutu)
+        const bodyGeo = new THREE.BoxGeometry(1.8, 0.8, 2.2);
+        const body = new THREE.Mesh(bodyGeo, woodMaterial);
+        body.position.y = 0.8;
+        body.castShadow = true;
+        tankGroup.add(body);
+
+        // Yan Paneller (Paletlerin olduğu kısım)
+        const sideGeo = new THREE.BoxGeometry(0.2, 1.2, 2.8);
+
+        const leftSide = new THREE.Mesh(sideGeo, woodMaterial);
+        leftSide.position.set(-1, 0.6, 0);
+        tankGroup.add(leftSide);
+
+        const rightSide = new THREE.Mesh(sideGeo, woodMaterial);
+        rightSide.position.set(1, 0.6, 0);
+        tankGroup.add(rightSide);
+
+        // Tekerlekler (Süs - Yanlara yapışık silindirler)
+        const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.3, 16);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
+
+        for (let i = 0; i < 4; i++) {
+            // Sol Tekerlekler
+            let wL = new THREE.Mesh(wheelGeo, wheelMat);
+            wL.rotation.z = Math.PI / 2;
+            wL.position.set(-1.1, 0.3, -1 + (i * 0.7));
+            tankGroup.add(wL);
+
+            // Sağ Tekerlekler
+            let wR = new THREE.Mesh(wheelGeo, wheelMat);
+            wR.rotation.z = Math.PI / 2;
+            wR.position.set(1.1, 0.3, -1 + (i * 0.7));
+            tankGroup.add(wR);
+        }
+
+        // Taret (Üstteki dönen kısım)
+        const turretGeo = new THREE.BoxGeometry(1, 0.6, 1);
+        const turret = new THREE.Mesh(turretGeo, woodMaterial);
+        turret.position.y = 1.5;
+        turret.castShadow = true;
+        tankGroup.add(turret);
+
+        // Namlu (Top)
+        const barrelGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.5, 16);
+        const barrel = new THREE.Mesh(barrelGeo, woodMaterial);
+        barrel.rotation.x = Math.PI / 2; // Öne doğru yatır
+        barrel.position.set(0, 1.6, 1); // Taretin önüne koy
+        tankGroup.add(barrel);
+
+        // "morMaker" yazısı yerine temsili süs (Ön panel)
+        const plateGeo = new THREE.BoxGeometry(1.4, 0.6, 0.1);
+        const plate = new THREE.Mesh(plateGeo, darkWoodMaterial);
+        plate.position.set(0, 0.8, 1.15);
+        tankGroup.add(plate);
+
+        scene.add(tankGroup);
+
+        // --- 5. OYUN MEKANİKLERİ ---
+
+        // Hedefler (Renkli Küpler)
+        const targets = [];
+        function createTarget() {
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+            const mat = new THREE.MeshStandardMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+
+            // Rastgele konum
+            mesh.position.x = (Math.random() - 0.5) * 80;
+            mesh.position.z = (Math.random() - 0.5) * 80;
+            mesh.position.y = 0.5;
+            mesh.castShadow = true;
+
+            scene.add(mesh);
+            targets.push(mesh);
+        }
+
+        // 10 tane hedef oluştur
+        for (let i = 0; i < 10; i++) createTarget();
+
+        // Mermiler
+        const bullets = [];
+        const bulletSpeed = 0.8;
+
+        // Kontroller
+        let input = { x: 0, y: 0 };
+
+        // Joystick
+        const manager = nipplejs.create({
+            zone: document.getElementById('joystick-zone'),
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'white'
+        });
+
+        manager.on('move', (evt, data) => {
+            if (data && data.vector) {
+                input.x = data.vector.x;
+                input.y = data.vector.y;
+            }
+        });
+
+        manager.on('end', () => {
+            input.x = 0;
+            input.y = 0;
+        });
+
+        // Keyboard fallback
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') input.y = 1;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') input.y = -1;
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.x = -1;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') input.x = 1;
+            if (e.code === 'Space') fire();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') input.y = 0;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') input.y = 0;
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.x = 0;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') input.x = 0;
+        });
+
+        window.fire = function () {
+            const bulletGeo = new THREE.SphereGeometry(0.15, 8, 8);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+
+            // Mermiyi namlu ucundan başlat
+            bullet.position.copy(tankGroup.position);
+            bullet.position.y = 1.6; // Namlu yüksekliği
+
+            // Tankın baktığı yöne göre hafif ileri al
+            const direction = new THREE.Vector3(0, 0, 1);
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), tankGroup.rotation.y);
+            bullet.position.add(direction.multiplyScalar(1.5));
+
+            // Mermiye hız vektörü ekle (özel özellik)
+            bullet.velocity = direction.normalize().multiplyScalar(bulletSpeed);
+
+            scene.add(bullet);
+            bullets.push(bullet);
+        }
+
+        // Skor
+        let score = 0;
+        const scoreEl = document.getElementById('score-board');
+
+        // --- 6. OYUN DÖNGÜSÜ (ANIMATION LOOP) ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Tank Hareketi
+            const speed = 0.2;
+            const rotSpeed = 0.05;
+
+            if (Math.abs(input.y) > 0.1) {
+                tankGroup.position.x += Math.sin(tankGroup.rotation.y) * speed * input.y;
+                tankGroup.position.z += Math.cos(tankGroup.rotation.y) * speed * input.y;
+                // Hareket animasyonu (hafif sallanma)
+                tankGroup.rotation.z = Math.sin(Date.now() * 0.01) * 0.02;
+            } else {
+                tankGroup.rotation.z = 0;
+            }
+
+            if (Math.abs(input.x) > 0.1) {
+                tankGroup.rotation.y -= rotSpeed * input.x;
+            }
+
+            // 2. Kamera Takibi (TPS - Third Person Shooter)
+            // Tankın arkasında ve biraz yukarısında dur
+            const relativeCameraOffset = new THREE.Vector3(0, 5, -10);
+            const cameraOffset = relativeCameraOffset.applyMatrix4(tankGroup.matrixWorld);
+
+            camera.position.lerp(cameraOffset, 0.1); // Yumuşak geçiş
+            camera.lookAt(tankGroup.position);
+
+            // 3. Mermi Güncelleme ve Çarpışma
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.position.add(b.velocity);
+
+                // Uzaklaşan mermileri sil
+                if (b.position.distanceTo(tankGroup.position) > 100) {
+                    scene.remove(b);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Hedef vurmaca
+                for (let j = targets.length - 1; j >= 0; j--) {
+                    const t = targets[j];
+                    if (b.position.distanceTo(t.position) < 1.2) {
+                        // Vuruldu!
+                        scene.remove(t);
+                        targets.splice(j, 1);
+                        scene.remove(b);
+                        bullets.splice(i, 1);
+
+                        // Puan artır
+                        score += 10;
+                        scoreEl.innerText = "PUAN: " + score;
+
+                        // Yeni hedef oluştur
+                        // createTarget(); // Don't respawn to allow winning
+
+                        if (targets.length === 0) {
+                            document.getElementById('game-over').style.display = 'block';
+                            confetti();
+                        }
+
+                        break; // Bir mermi bir hedef vurur
+                    }
+                }
+            }
+
+            // Hedeflerin animasyonu (yüzme hareketi)
+            targets.forEach(t => {
+                t.rotation.x += 0.01;
+                t.rotation.y += 0.01;
+                t.position.y = 0.5 + Math.sin(Date.now() * 0.002 + t.position.x) * 0.5;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Pencere boyutu değişirse
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+
+</html>

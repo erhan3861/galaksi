@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tren Macerası</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background: #87CEEB;
+            user-select: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+        }
+
+        .score-board {
+            background: #FFCF71;
+            border: 4px solid #FFF;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-size: 32px;
+            color: #5D4037;
+            font-weight: 700;
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mute-btn {
+            pointer-events: auto;
+            background: #FFF;
+            border: 4px solid #E0E0E0;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s;
+        }
+
+        .mute-btn:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+
+        /* Start Screen */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(135, 206, 235, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            pointer-events: auto;
+        }
+
+        .title {
+            font-size: 60px;
+            color: #FFF;
+            text-shadow: 0 4px 0 #E65100;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .controls-visual {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 30px;
+            border-radius: 30px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .key-icon {
+            background: white;
+            border: 3px solid #DDD;
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 32px;
+            box-shadow: 0 4px 0 #CCC;
+            color: #E65100;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .control-label {
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        #play-btn {
+            background: #FF5722;
+            color: white;
+            border: 6px solid white;
+            padding: 20px 60px;
+            font-size: 40px;
+            border-radius: 99px;
+            font-family: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 10px 0 #BF360C;
+            transition: transform 0.1s;
+            animation: pulse 2s infinite;
+        }
+
+        #play-btn:hover {
+            transform: scale(1.05);
+        }
+
+        #play-btn:active {
+            transform: translateY(6px) scale(1);
+            box-shadow: 0 4px 0 #BF360C;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        /* In-Game Controls Hint (Bottom Left) */
+        .ingame-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 20px;
+            display: none;
+            gap: 15px;
+            border: 3px solid white;
+        }
+
+        .mini-key {
+            font-size: 20px;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 8px;
+            border: 2px solid #DDD;
+        }
+
+        /* Game Over Screen */
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 40px;
+            text-align: center;
+            border: 8px solid #FF7EB3;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+            display: none;
+            pointer-events: auto;
+            z-index: 30;
+        }
+
+        #game-over h1 {
+            color: #FF7EB3;
+            font-size: 48px;
+            margin: 0 0 20px;
+        }
+
+        #restart-btn {
+            background: #6C5DD3;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            border-radius: 99px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #5648A5;
+        }
+
+        #restart-btn:active {
+            transform: translateY(6px);
+            box-shadow: none;
+        }
+
+        /* Flash Effect Overlay */
+        #flash-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 25;
+            transition: opacity 0.1s;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="score-board">
+                <span>⭐</span> <span id="score">0</span>
+            </div>
+            <button class="mute-btn" id="mute-btn" title="Sesi Aç/Kapat">🔊</button>
+        </div>
+
+        <div class="ingame-controls" id="ingame-controls">
+            <div class="mini-key">⬅️➡️ Şerit Değiştir</div>
+        </div>
+    </div>
+
+    <div id="flash-overlay"></div>
+
+    <div id="start-screen">
+        <h1 class="title">Tren Macerası 🚂</h1>
+
+        <div class="controls-visual">
+            <div class="control-group">
+                <div style="display:flex; gap:20px;">
+                    <div class="key-icon">⬅️</div>
+                    <div class="key-icon">➡️</div>
+                </div>
+                <div class="control-label">Şerit Değiştir</div>
+            </div>
+        </div>
+
+        <button id="play-btn">BAŞLA ▶</button>
+    </div>
+
+    <div id="game-over">
+        <h1>Oyun Bitti!</h1>
+        <p style="font-size: 24px; color: #7A7E99; margin-bottom: 30px;">Skorun: <span id="final-score">0</span></p>
+        <button id="restart-btn">Tekrar Oyna 🔁</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Sound Manager (Web Audio API) ---
+        class SoundManager {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.isMuted = false;
+            }
+
+            playCollect() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(900, this.ctx.currentTime + 0.1);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            playCrash() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.4);
+
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            }
+
+            playGameOver() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 1.0);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 1.0);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 1.0);
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                return this.isMuted;
+            }
+        }
+
+        // --- Game Variables ---
+        let scene, camera, renderer;
+        let train;
+        let coins = [];
+        let rocks = [];
+        let score = 0;
+        let isPlaying = false;
+        let isGameOver = false;
+        const soundManager = new SoundManager();
+
+        // 3-Lane System
+        const LANE_WIDTH = 6;
+        const LANES = [-LANE_WIDTH, 0, LANE_WIDTH]; // Left, Center, Right
+        let currentLaneIndex = 1; // Start in Center
+        let targetX = 0;
+
+        // Physics & Effects
+        const speed = 0.3; // Constant forward speed (simulated by moving objects)
+        let shakeIntensity = 0;
+
+        // UI Elements
+        const scoreEl = document.getElementById('score');
+        const gameOverEl = document.getElementById('game-over');
+        const finalScoreEl = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        const playBtn = document.getElementById('play-btn');
+        const startScreen = document.getElementById('start-screen');
+        const muteBtn = document.getElementById('mute-btn');
+        const ingameControls = document.getElementById('ingame-controls');
+        const flashOverlay = document.getElementById('flash-overlay');
+
+        init();
+        animate();
+
+        function init() {
+            // 1. Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky Blue
+            scene.fog = new THREE.Fog(0x87CEEB, 10, 60);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 8, 12);
+            camera.lookAt(0, 0, 0);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // 4. Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 5. Objects
+            createGround();
+            createTrain();
+
+            // Initial Spawns
+            for (let i = 0; i < 10; i++) spawnCoin();
+            for (let i = 0; i < 5; i++) spawnObstacle();
+
+            // 6. Events
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', handleKey);
+
+            playBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', resetGame);
+            muteBtn.addEventListener('click', () => {
+                const muted = soundManager.toggleMute();
+                muteBtn.textContent = muted ? '🔇' : '🔊';
+            });
+        }
+
+        function startGame() {
+            isPlaying = true;
+            startScreen.style.display = 'none';
+            ingameControls.style.display = 'flex';
+
+            if (soundManager.ctx.state === 'suspended') {
+                soundManager.ctx.resume();
+            }
+        }
+
+        function createGround() {
+            // Green Grass
+            const geometry = new THREE.PlaneGeometry(500, 500);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x7CFC00, // Lawn Green
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const ground = new THREE.Mesh(geometry, material);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.5;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Create 3 Tracks
+            LANES.forEach(xPos => {
+                createTrack(xPos);
+            });
+        }
+
+        function createTrack(xPos) {
+            // Sleepers (Visual only, one long strip)
+            const trackGeo = new THREE.PlaneGeometry(3, 500);
+            const trackMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // SaddleBrown
+            const track = new THREE.Mesh(trackGeo, trackMat);
+            track.rotation.x = -Math.PI / 2;
+            track.position.set(xPos, -0.48, 0);
+            scene.add(track);
+
+            // Rails
+            const railGeo = new THREE.BoxGeometry(0.2, 0.2, 500);
+            const railMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+
+            const rail1 = new THREE.Mesh(railGeo, railMat);
+            rail1.position.set(xPos - 1, -0.4, 0);
+            scene.add(rail1);
+
+            const rail2 = new THREE.Mesh(railGeo, railMat);
+            rail2.position.set(xPos + 1, -0.4, 0);
+            scene.add(rail2);
+        }
+
+        function createTrain() {
+            train = new THREE.Group();
+
+            // Main Body
+            const bodyGeo = new THREE.BoxGeometry(2, 2, 4);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFF0000 }); // Red
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1;
+            body.castShadow = true;
+            train.add(body);
+
+            // Cabin
+            const cabinGeo = new THREE.BoxGeometry(2.2, 2.5, 2);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0000FF }); // Blue
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.5, 1);
+            cabin.castShadow = true;
+            train.add(cabin);
+
+            // Chimney
+            const chimneyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.5);
+            const chimneyMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const chimney = new THREE.Mesh(chimneyGeo, chimneyMat);
+            chimney.position.set(0, 2.5, -1.2);
+            train.add(chimney);
+
+            // Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            wheelGeo.rotateZ(Math.PI / 2);
+
+            const w1 = new THREE.Mesh(wheelGeo, wheelMat); w1.position.set(1.1, 0, -1);
+            const w2 = new THREE.Mesh(wheelGeo, wheelMat); w2.position.set(-1.1, 0, -1);
+            const w3 = new THREE.Mesh(wheelGeo, wheelMat); w3.position.set(1.1, 0, 1.5);
+            const w4 = new THREE.Mesh(wheelGeo, wheelMat); w4.position.set(-1.1, 0, 1.5);
+
+            train.add(w1, w2, w3, w4);
+
+            scene.add(train);
+        }
+
+        function spawnCoin() {
+            // Pick a random lane
+            const laneIdx = Math.floor(Math.random() * 3);
+            const xPos = LANES[laneIdx];
+
+            // Star Shape
+            const shape = new THREE.Shape();
+            const outerRadius = 0.5;
+            const innerRadius = 0.25;
+            const spikes = 5;
+
+            for (let i = 0; i < spikes * 2; i++) {
+                const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                const a = (Math.PI * i) / spikes;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if (i === 0) shape.moveTo(x, y);
+                else shape.lineTo(x, y);
+            }
+            shape.closePath();
+
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.2, bevelEnabled: false });
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xFFD700, // Gold
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const coin = new THREE.Mesh(geo, mat);
+
+            const z = -30 - (Math.random() * 40);
+
+            coin.position.set(xPos, 1, z);
+            scene.add(coin);
+            coins.push(coin);
+        }
+
+        function spawnObstacle() {
+            // Pick a random lane
+            const laneIdx = Math.floor(Math.random() * 3);
+            const xPos = LANES[laneIdx];
+
+            // Simple Tree
+            const group = new THREE.Group();
+
+            // Trunk
+            const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.5);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 0.75;
+            group.add(trunk);
+
+            // Leaves
+            const leavesGeo = new THREE.ConeGeometry(1.5, 3, 8);
+            const leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Forest Green
+            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+            leaves.position.y = 2.5;
+            group.add(leaves);
+
+            const z = -40 - (Math.random() * 50);
+
+            group.position.set(xPos, 0, z);
+            scene.add(group);
+            rocks.push(group);
+        }
+
+        function handleKey(e) {
+            if (!isPlaying || isGameOver) return;
+
+            if (e.code === 'ArrowLeft') {
+                if (currentLaneIndex > 0) {
+                    currentLaneIndex--;
+                    targetX = LANES[currentLaneIndex];
+                }
+            }
+            if (e.code === 'ArrowRight') {
+                if (currentLaneIndex < 2) {
+                    currentLaneIndex++;
+                    targetX = LANES[currentLaneIndex];
+                }
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function resetGame() {
+            isGameOver = false;
+            isPlaying = true;
+            score = 0;
+            scoreEl.textContent = score;
+            gameOverEl.style.display = 'none';
+            flashOverlay.style.opacity = 0;
+
+            currentLaneIndex = 1;
+            targetX = 0;
+
+            if (train) {
+                train.position.set(0, 0, 0);
+                train.rotation.set(0, 0, 0);
+            }
+
+            coins.forEach(c => scene.remove(c));
+            coins = [];
+            rocks.forEach(r => scene.remove(r));
+            rocks = [];
+
+            for (let i = 0; i < 10; i++) spawnCoin();
+            for (let i = 0; i < 8; i++) spawnObstacle(); // Increased density
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Screen Shake Decay
+            if (shakeIntensity > 0) {
+                shakeIntensity -= 0.05;
+                if (shakeIntensity < 0) shakeIntensity = 0;
+                camera.position.x += (Math.random() - 0.5) * shakeIntensity;
+                camera.position.y += (Math.random() - 0.5) * shakeIntensity;
+            }
+
+            if (!isPlaying || isGameOver) {
+                return;
+            }
+
+            if (train) {
+                // Smooth Lane Switching
+                train.position.x += (targetX - train.position.x) * 0.1;
+
+                // Tilt based on movement
+                const tilt = (train.position.x - targetX) * 0.05;
+                train.rotation.z = tilt;
+
+                // Camera Follow
+                camera.position.x += (train.position.x - camera.position.x) * 0.05;
+                camera.position.z = train.position.z + 12;
+                camera.position.y = 8; // Reset Y after shake
+                camera.lookAt(train.position.x, 0, train.position.z - 5);
+            }
+
+            // Move Objects towards Train (Simulate forward movement)
+            // Actually, let's move objects towards Z > 0
+
+            // Coins (Stars)
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const coin = coins[i];
+                coin.position.z += speed; // Move towards camera
+                coin.rotation.y += 0.03;
+
+                if (train && coin.position.distanceTo(train.position) < 2.5) {
+                    scene.remove(coin);
+                    coins.splice(i, 1);
+                    score++;
+                    scoreEl.textContent = score;
+                    soundManager.playCollect();
+                    spawnCoin();
+                }
+
+                // Respawn if passed
+                if (coin.position.z > 10) {
+                    scene.remove(coin);
+                    coins.splice(i, 1);
+                    spawnCoin();
+                }
+            }
+            if (coins.length < 10) spawnCoin();
+
+            // Rocks (Trees)
+            for (let i = rocks.length - 1; i >= 0; i--) {
+                const rock = rocks[i];
+                rock.position.z += speed;
+
+                if (train && rock.position.distanceTo(train.position) < 2.0) {
+                    soundManager.playCrash();
+                    triggerCrashEffect();
+                    gameOver();
+                }
+
+                if (rock.position.z > 10) {
+                    scene.remove(rock);
+                    rocks.splice(i, 1);
+                    spawnObstacle();
+                }
+            }
+            if (rocks.length < 8) spawnObstacle();
+
+            renderer.render(scene, camera);
+        }
+
+        function triggerCrashEffect() {
+            shakeIntensity = 2;
+            flashOverlay.style.opacity = 0.5;
+            setTimeout(() => {
+                flashOverlay.style.opacity = 0;
+            }, 100);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            soundManager.playGameOver();
+            finalScoreEl.textContent = score;
+            gameOverEl.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>

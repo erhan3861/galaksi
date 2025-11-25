@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Yürüyen Robot Maratonu</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #87CEEB;
+            user-select: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .timer-box {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 15px;
+            border: 3px solid #333;
+            font-size: 30px;
+            color: #333;
+        }
+
+        .progress-bar-container {
+            width: 300px;
+            height: 20px;
+            background: #eee;
+            border-radius: 10px;
+            border: 2px solid #333;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #32CD32;
+            transition: width 0.2s;
+        }
+
+        #start-screen,
+        #game-over-screen,
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .big-btn {
+            background: #FF8C00;
+            color: white;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            border-radius: 60px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            margin-top: 30px;
+            box-shadow: 0 6px 0 #8B4500;
+            transition: transform 0.1s;
+        }
+
+        .big-btn:active {
+            transform: translateY(6px);
+            box-shadow: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            font-size: 20px;
+            color: white;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none;
+            /* Shown via JS if touch */
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
+        }
+
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            border: 2px solid white;
+            font-size: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "canvas-confetti": "https://cdn.skypack.dev/canvas-confetti"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="game-container"></div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <div class="timer-box" id="timer">00:00</div>
+            <div>
+                <div style="color: white; text-shadow: 1px 1px 0 #000;">Bitiş Çizgisi</div>
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-hint" id="desktop-hint">Yön Tuşları ile Koş! ⬆️ ⬅️ ➡️</div>
+
+        <div id="mobile-controls">
+            <div class="control-btn" id="btn-left">⬅️</div>
+            <div class="control-btn" id="btn-up">⬆️</div>
+            <div class="control-btn" id="btn-right">➡️</div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1 style="font-size: 4rem; margin: 0; color: #FFD700; text-shadow: 4px 4px 0 #FF4500;">ROBOT MARATONU</h1>
+        <p style="font-size: 1.5rem;">Bitiş çizgisine en hızlı şekilde ulaş!</p>
+        <button class="big-btn" id="start-btn">KOŞUYA BAŞLA ▶</button>
+    </div>
+
+    <div id="win-screen" class="hidden">
+        <h1 style="font-size: 4rem; color: #32CD32;">BİTİRDİN! 🏆</h1>
+        <p style="font-size: 2rem;">Süre: <span id="final-time">00:00</span></p>
+        <button class="big-btn" id="restart-btn">TEKRAR KOŞ ↺</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import confetti from 'canvas-confetti';
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer;
+        let robotGroup, leftLeg, rightLeg, leftArm, rightArm;
+        let obstacles = [];
+        let finishLineZ = -200;
+        let isGameActive = false;
+        let startTime;
+
+        // Physics/Movement
+        let speed = 0;
+        let maxSpeed = 0.5;
+        let acceleration = 0.01;
+        let friction = 0.95;
+        let turnSpeed = 0.05;
+        let angle = 0;
+
+        // Animation
+        let walkCycle = 0;
+
+        // Input
+        const keys = { ArrowUp: false, ArrowLeft: false, ArrowRight: false };
+
+        init();
+        animate();
+
+        function init() {
+            // 1. SCENE
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+            camera.lookAt(0, 2, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // LIGHTS
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.set(2048, 2048);
+            scene.add(dirLight);
+
+            // 2. OBJECTS
+            createEnvironment();
+            createRobot();
+            createObstacles();
+
+            // 3. EVENTS
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = true; });
+            window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+
+            // Touch Controls
+            if ('ontouchstart' in window) {
+                document.getElementById('desktop-hint').style.display = 'none';
+                document.getElementById('mobile-controls').style.display = 'flex';
+
+                const btnUp = document.getElementById('btn-up');
+                const btnLeft = document.getElementById('btn-left');
+                const btnRight = document.getElementById('btn-right');
+
+                const bindTouch = (el, code) => {
+                    el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[code] = true; });
+                    el.addEventListener('touchend', (e) => { e.preventDefault(); keys[code] = false; });
+                };
+
+                bindTouch(btnUp, 'ArrowUp');
+                bindTouch(btnLeft, 'ArrowLeft');
+                bindTouch(btnRight, 'ArrowRight');
+            }
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+        }
+
+        function createEnvironment() {
+            // Ground (Track)
+            const trackGeo = new THREE.PlaneGeometry(20, 500);
+            const trackMat = new THREE.MeshStandardMaterial({ color: 0xDEB887 }); // Dirt track
+            const track = new THREE.Mesh(trackGeo, trackMat);
+            track.rotation.x = -Math.PI / 2;
+            track.position.z = -100; // Start at 0, go to -200
+            track.receiveShadow = true;
+            scene.add(track);
+
+            // Grass
+            const grassGeo = new THREE.PlaneGeometry(200, 500);
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const grass = new THREE.Mesh(grassGeo, grassMat);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.y = -0.1;
+            grass.position.z = -100;
+            scene.add(grass);
+
+            // Finish Line
+            const finishGeo = new THREE.PlaneGeometry(20, 2);
+            const finishMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // Checkered ideally
+            const finish = new THREE.Mesh(finishGeo, finishMat);
+            finish.rotation.x = -Math.PI / 2;
+            finish.position.set(0, 0.01, finishLineZ);
+            scene.add(finish);
+
+            // Finish Arch
+            const archGroup = new THREE.Group();
+            archGroup.position.z = finishLineZ;
+            scene.add(archGroup);
+
+            const postGeo = new THREE.BoxGeometry(1, 10, 1);
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x333 });
+            const leftPost = new THREE.Mesh(postGeo, postMat);
+            leftPost.position.set(-9, 5, 0);
+            archGroup.add(leftPost);
+            const rightPost = new THREE.Mesh(postGeo, postMat);
+            rightPost.position.set(9, 5, 0);
+            archGroup.add(rightPost);
+
+            const bannerGeo = new THREE.BoxGeometry(20, 2, 1);
+            const bannerMat = new THREE.MeshStandardMaterial({ color: 0xFF0000 });
+            const banner = new THREE.Mesh(bannerGeo, bannerMat);
+            banner.position.set(0, 10, 0);
+            archGroup.add(banner);
+        }
+
+        function createRobot() {
+            robotGroup = new THREE.Group();
+            scene.add(robotGroup);
+
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0xD2691E });
+            const jointMat = new THREE.MeshStandardMaterial({ color: 0x333 });
+
+            // Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1), woodMat);
+            body.position.y = 2.5;
+            body.castShadow = true;
+            robotGroup.add(body);
+
+            // Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), woodMat);
+            head.position.y = 4;
+            head.castShadow = true;
+            robotGroup.add(head);
+
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.1);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000 });
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.2, 4.1, 0.5);
+            robotGroup.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.2, 4.1, 0.5);
+            robotGroup.add(rightEye);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.4, 1.5, 0.4);
+
+            leftLeg = new THREE.Mesh(legGeo, woodMat);
+            leftLeg.position.set(-0.5, 1.5, 0);
+            robotGroup.add(leftLeg);
+
+            rightLeg = new THREE.Mesh(legGeo, woodMat);
+            rightLeg.position.set(0.5, 1.5, 0);
+            robotGroup.add(rightLeg);
+
+            // Arms
+            const armGeo = new THREE.BoxGeometry(0.3, 1.2, 0.3);
+
+            leftArm = new THREE.Mesh(armGeo, woodMat);
+            leftArm.position.set(-1, 3, 0);
+            robotGroup.add(leftArm);
+
+            rightArm = new THREE.Mesh(armGeo, woodMat);
+            rightArm.position.set(1, 3, 0);
+            robotGroup.add(rightArm);
+        }
+
+        function createObstacles() {
+            const rockGeo = new THREE.DodecahedronGeometry(0.8, 0);
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x808080 });
+
+            for (let i = 0; i < 20; i++) {
+                const rock = new THREE.Mesh(rockGeo, rockMat);
+                // Random pos between start and finish
+                const z = -10 - Math.random() * 180;
+                const x = (Math.random() - 0.5) * 15;
+
+                rock.position.set(x, 0.5, z);
+                rock.castShadow = true;
+                scene.add(rock);
+                obstacles.push(rock);
+            }
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.add('hidden');
+
+            isGameActive = true;
+            startTime = Date.now();
+
+            // Reset Robot
+            robotGroup.position.set(0, 0, 0);
+            robotGroup.rotation.y = 0;
+            speed = 0;
+            angle = 0;
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const s = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${m}:${s}`;
+            return `${m}:${s}`;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameActive) {
+                updateTimer();
+
+                // Movement Logic
+                if (keys.ArrowUp) {
+                    speed += acceleration;
+                } else {
+                    speed *= friction;
+                }
+
+                speed = Math.min(speed, maxSpeed);
+                speed = Math.max(speed, 0);
+
+                if (keys.ArrowLeft) angle += turnSpeed;
+                if (keys.ArrowRight) angle -= turnSpeed;
+
+                robotGroup.rotation.y = angle;
+
+                // Move Robot
+                const dx = Math.sin(angle) * speed;
+                const dz = Math.cos(angle) * speed; // Moving towards -Z is forward? 
+                // Wait, camera looks at 0,0,0 from +Z. So -Z is "into screen".
+                // Let's make forward -Z.
+                // cos(0) = 1. So we want -cos(angle).
+
+                robotGroup.position.x += Math.sin(angle) * speed;
+                robotGroup.position.z -= Math.cos(angle) * speed;
+
+                // Camera Follow
+                camera.position.x = robotGroup.position.x;
+                camera.position.z = robotGroup.position.z + 10;
+                camera.lookAt(robotGroup.position.x, 2, robotGroup.position.z);
+
+                // Animation (Walk Cycle)
+                if (speed > 0.01) {
+                    walkCycle += speed * 0.5;
+                    leftLeg.rotation.x = Math.sin(walkCycle * 10) * 0.5;
+                    rightLeg.rotation.x = Math.sin(walkCycle * 10 + Math.PI) * 0.5;
+
+                    leftArm.rotation.x = Math.sin(walkCycle * 10 + Math.PI) * 0.5;
+                    rightArm.rotation.x = Math.sin(walkCycle * 10) * 0.5;
+                } else {
+                    // Reset pose
+                    leftLeg.rotation.x = 0;
+                    rightLeg.rotation.x = 0;
+                    leftArm.rotation.x = 0;
+                    rightArm.rotation.x = 0;
+                }
+
+                // Bounds Check
+                if (robotGroup.position.x > 9) robotGroup.position.x = 9;
+                if (robotGroup.position.x < -9) robotGroup.position.x = -9;
+
+                // Obstacle Collision
+                const robotBox = new THREE.Box3().setFromObject(robotGroup);
+                obstacles.forEach(obs => {
+                    const obsBox = new THREE.Box3().setFromObject(obs);
+                    if (robotBox.intersectsBox(obsBox)) {
+                        // Collision!
+                        speed = -0.2; // Bounce back
+                    }
+                });
+
+                // Progress Bar
+                const totalDist = 200;
+                const currentDist = -robotGroup.position.z;
+                const pct = Math.min(100, Math.max(0, (currentDist / totalDist) * 100));
+                document.getElementById('progress-bar').style.width = pct + '%';
+
+                // Win Condition
+                if (robotGroup.position.z < finishLineZ) {
+                    isGameActive = false;
+                    const timeStr = updateTimer();
+                    document.getElementById('final-time').innerText = timeStr;
+                    document.getElementById('win-screen').classList.remove('hidden');
+                    confetti();
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

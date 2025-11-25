@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Mor Maker: Mekanik Gırgır</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background: #f0f0f0;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        #top-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            background: linear-gradient(to bottom, rgba(255, 140, 0, 0.9), transparent);
+            color: white;
+            font-size: 24px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            padding: 10px 25px;
+            border-radius: 20px;
+            border: 2px solid white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #controls {
+            pointer-events: auto;
+            display: flex;
+            justify-content: center;
+            padding: 30px;
+        }
+
+        .game-btn {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 22px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 8px 0 #27ae60;
+            transition: transform 0.1s;
+            font-family: 'Fredoka', sans-serif;
+            font-weight: bold;
+        }
+
+        .game-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 #27ae60;
+        }
+
+        #joker-btn {
+            background: #3498db;
+            box-shadow: 0 8px 0 #2980b9;
+        }
+
+        #joker-btn:active {
+            box-shadow: 0 4px 0 #2980b9;
+        }
+
+        #game-over,
+        #win-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 50px;
+            border-radius: 30px;
+            text-align: center;
+            display: none;
+            pointer-events: auto;
+            border: 8px solid #e67e22;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.2);
+        }
+
+        #hint {
+            position: absolute;
+            bottom: 150px;
+            width: 100%;
+            text-align: center;
+            font-size: 20px;
+            color: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="ui-container">
+        <div id="top-bar">
+            <div class="stat-box">🧹 Çöp: <span id="score">0</span></div>
+            <div class="stat-box">❤️ Can: <span id="health">3</span></div>
+            <div class="stat-box">⏳ Süre: <span id="time">60</span></div>
+        </div>
+
+        <div id="hint">Parmağınla/Farenle gırgırı yönet! 👆</div>
+
+        <div id="controls">
+            <button class="game-btn" id="joker-btn" onclick="useJoker()">🌪️ SÜPER VAKUM</button>
+        </div>
+    </div>
+
+    <div id="game-over">
+        <h1 style="color: #e74c3c;">Oyun Bitti!</h1>
+        <p style="font-size: 24px;">Toplanan Çöp: <span id="final-score">0</span></p>
+        <button class="game-btn" onclick="location.reload()">Tekrar Oyna</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Game State
+        let score = 0;
+        let health = 3;
+        let time = 60;
+        let gameActive = true;
+        let jokerActive = false;
+
+        // Input
+        const mouse = new THREE.Vector2();
+        const targetPos = new THREE.Vector3();
+        const raycaster = new THREE.Raycaster();
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        // Three.js Setup
+        let scene, camera, renderer;
+        let sweeperGroup, brushes = [];
+        let dusts = [];
+        let obstacles = [];
+
+        init();
+        animate();
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f8ff);
+            scene.fog = new THREE.Fog(0xf0f8ff, 20, 60);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 25, 15);
+            camera.lookAt(0, 0, 5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 30, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            // Floor
+            const floorGeo = new THREE.PlaneGeometry(60, 60);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Grid pattern
+            const grid = new THREE.GridHelper(60, 30, 0xcccccc, 0xeeeeee);
+            scene.add(grid);
+
+            createSweeper();
+            createDust();
+            createObstacles();
+
+            // Events
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('resize', onWindowResize);
+
+            window.useJoker = useJoker;
+        }
+
+        function createSweeper() {
+            sweeperGroup = new THREE.Group();
+            scene.add(sweeperGroup);
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff6b6b });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+            // Main Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 2), bodyMat);
+            body.position.y = 0.5;
+            body.castShadow = true;
+            sweeperGroup.add(body);
+
+            // Handle
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5), darkMat);
+            handle.position.set(0, 2.5, 2);
+            handle.rotation.x = -Math.PI / 3;
+            sweeperGroup.add(handle);
+
+            // Handle Grip
+            const grip = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1), bodyMat);
+            grip.position.set(0, 4.5, 3.2);
+            grip.rotation.z = Math.PI / 2;
+            sweeperGroup.add(grip);
+
+            // Brushes (Rotating)
+            const brushGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.2, 16);
+            const brushMat = new THREE.MeshStandardMaterial({ color: 0x333333, wireframe: false });
+
+            const b1 = new THREE.Mesh(brushGeo, brushMat);
+            b1.position.set(-1, 0.2, 0);
+            sweeperGroup.add(b1);
+            brushes.push(b1);
+
+            const b2 = new THREE.Mesh(brushGeo, brushMat);
+            b2.position.set(1, 0.2, 0);
+            sweeperGroup.add(b2);
+            brushes.push(b2);
+
+            // Bristles visual
+            const bristleGeo = new THREE.BoxGeometry(0.1, 0.1, 1.4);
+            const bristleMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+            for (let i = 0; i < 4; i++) {
+                const br1 = new THREE.Mesh(bristleGeo, bristleMat);
+                br1.rotation.y = (Math.PI / 2) * i;
+                b1.add(br1);
+
+                const br2 = new THREE.Mesh(bristleGeo, bristleMat);
+                br2.rotation.y = (Math.PI / 2) * i;
+                b2.add(br2);
+            }
+        }
+
+        function createDust() {
+            const dustGeo = new THREE.DodecahedronGeometry(0.3);
+            const dustMat = new THREE.MeshStandardMaterial({ color: 0x95a5a6 });
+            const paperMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+            for (let i = 0; i < 40; i++) {
+                const isPaper = Math.random() > 0.7;
+                const dust = new THREE.Mesh(isPaper ? new THREE.BoxGeometry(0.4, 0.1, 0.4) : dustGeo, isPaper ? paperMat : dustMat);
+
+                dust.position.set(
+                    (Math.random() - 0.5) * 50,
+                    0.2,
+                    (Math.random() - 0.5) * 50
+                );
+                dust.rotation.set(Math.random(), Math.random(), Math.random());
+                dust.castShadow = true;
+                scene.add(dust);
+                dusts.push(dust);
+            }
+        }
+
+        function createObstacles() {
+            const obsGeo = new THREE.BoxGeometry(2, 2, 2);
+            const obsMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad }); // Purple boxes (Toys?)
+
+            for (let i = 0; i < 8; i++) {
+                const obs = new THREE.Mesh(obsGeo, obsMat);
+                obs.position.set(
+                    (Math.random() - 0.5) * 40,
+                    1,
+                    (Math.random() - 0.5) * 40
+                );
+                // Ensure not too close to center
+                if (obs.position.length() < 5) obs.position.set(10, 1, 10);
+
+                obs.castShadow = true;
+                scene.add(obs);
+                obstacles.push(obs);
+            }
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            updateTarget();
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault();
+            mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+            updateTarget();
+        }
+
+        function updateTarget() {
+            raycaster.setFromCamera(mouse, camera);
+            raycaster.ray.intersectPlane(plane, targetPos);
+        }
+
+        function useJoker() {
+            if (!gameActive || jokerActive) return;
+            jokerActive = true;
+            document.getElementById('joker-btn').style.opacity = 0.5;
+            document.getElementById('joker-btn').innerText = "AKTİF!";
+
+            // Visual
+            const ringGeo = new THREE.RingGeometry(2, 3, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x3498db, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.1;
+            sweeperGroup.add(ring);
+
+            setTimeout(() => {
+                jokerActive = false;
+                sweeperGroup.remove(ring);
+                document.getElementById('joker-btn').style.opacity = 1;
+                document.getElementById('joker-btn').innerText = "🌪️ SÜPER VAKUM";
+            }, 5000);
+        }
+
+        function checkCollisions() {
+            const vacuumRadius = jokerActive ? 8 : 2.5;
+
+            for (let i = dusts.length - 1; i >= 0; i--) {
+                const dust = dusts[i];
+                const dist = sweeperGroup.position.distanceTo(dust.position);
+
+                if (dist < vacuumRadius) {
+                    // Suck animation
+                    dust.position.lerp(sweeperGroup.position, 0.2);
+                    dust.scale.multiplyScalar(0.9);
+
+                    if (dist < 1) {
+                        scene.remove(dust);
+                        dusts.splice(i, 1);
+                        score++;
+                        document.getElementById('score').innerText = score;
+                    }
+                }
+            }
+
+            if (dusts.length < 10) {
+                createDust(); // Respawn
+            }
+
+            // Obstacles
+            if (!jokerActive) {
+                obstacles.forEach(obs => {
+                    if (sweeperGroup.position.distanceTo(obs.position) < 3) {
+                        // Bounce
+                        const dir = sweeperGroup.position.clone().sub(obs.position).normalize();
+                        targetPos.add(dir.multiplyScalar(5)); // Push target away
+                        sweeperGroup.position.add(dir.multiplyScalar(1));
+
+                        health--;
+                        document.getElementById('health').innerText = health;
+                        if (health <= 0) endGame();
+                    }
+                });
+            }
+        }
+
+        function endGame() {
+            gameActive = false;
+            document.getElementById('game-over').style.display = 'block';
+            document.getElementById('final-score').innerText = score;
+        }
+
+        // Timer
+        setInterval(() => {
+            if (gameActive && time > 0) {
+                time--;
+                document.getElementById('time').innerText = time;
+                if (time <= 0) endGame();
+            }
+        }, 1000);
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameActive) {
+                // Move towards target
+                const dir = targetPos.clone().sub(sweeperGroup.position);
+                const dist = dir.length();
+
+                if (dist > 0.1) {
+                    dir.normalize();
+                    const speed = 0.4;
+                    sweeperGroup.position.add(dir.multiplyScalar(Math.min(dist, speed)));
+
+                    // Rotate to face direction
+                    const angle = Math.atan2(dir.x, dir.z);
+                    sweeperGroup.rotation.y = angle;
+
+                    // Rotate brushes
+                    brushes.forEach(b => b.rotation.y += 0.2);
+                }
+
+                // Bounds
+                sweeperGroup.position.x = Math.max(-28, Math.min(28, sweeperGroup.position.x));
+                sweeperGroup.position.z = Math.max(-28, Math.min(28, sweeperGroup.position.z));
+
+                checkCollisions();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+    </script>
+</body>
+
+</html>

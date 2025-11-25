@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BARKAN - Holografik Montaj</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
+
+        body {
+            margin: 0;
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+            background-color: #050510;
+            color: #00ffff;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        .section {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 5%;
+            box-sizing: border-box;
+            position: relative;
+            pointer-events: none;
+            /* Let clicks pass through */
+        }
+
+        .card {
+            background: rgba(0, 20, 40, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 5px;
+            max-width: 400px;
+            border-left: 4px solid #00ffff;
+            border-top: 1px solid rgba(0, 255, 255, 0.3);
+            transform: translateX(-50px);
+            opacity: 0;
+            transition: all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+
+        .section.active .card {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 2rem;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        p {
+            line-height: 1.6;
+            font-size: 1.2rem;
+            color: #e0e0e0;
+        }
+
+        .page-ref {
+            font-size: 0.9rem;
+            color: #00aaaa;
+            display: block;
+            margin-top: 15px;
+            font-family: monospace;
+            border-top: 1px solid rgba(0, 255, 255, 0.2);
+            padding-top: 10px;
+        }
+
+        #progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: #00ffff;
+            width: 0%;
+            z-index: 100;
+            box-shadow: 0 0 10px #00ffff;
+        }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            padding: 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            font-family: monospace;
+            z-index: 1000;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        .hud-line {
+            position: fixed;
+            background: rgba(0, 255, 255, 0.1);
+            pointer-events: none;
+        }
+
+        .hud-h {
+            width: 100%;
+            height: 1px;
+        }
+
+        .hud-v {
+            width: 1px;
+            height: 100%;
+        }
+
+        #toggle-explode {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            padding: 15px 30px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #toggle-explode:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="progress-bar"></div>
+    <div id="tooltip"></div>
+
+    <!-- HUD Elements -->
+    <div class="hud-line hud-h" style="top: 10%;"></div>
+    <div class="hud-line hud-h" style="bottom: 10%;"></div>
+    <div class="hud-line hud-v" style="left: 5%;"></div>
+    <div class="hud-line hud-v" style="right: 5%;"></div>
+
+    <div id="canvas-container"></div>
+
+    <button id="toggle-explode">Patlatılmış Görünüm</button>
+
+    <div class="scroll-content">
+
+        <div class="section" id="step0">
+            <div class="card">
+                <h2>BARKAN Projesi</h2>
+                <p>İnsansız Kara Aracı (İKA) montaj simülasyonuna hoş geldiniz. Aşağı kaydırarak sistem kurulumunu
+                    başlatın.</p>
+                <span class="page-ref">Sistem Durumu: BEKLEMEDE</span>
+            </div>
+        </div>
+
+        <div class="section" id="step1">
+            <div class="card">
+                <h2>Güç Ünitesi</h2>
+                <p>Yüksek kapasiteli Li-Po batarya hücresini şasi yuvasına yerleştirin. Kutupların doğru hizalandığından
+                    emin olun.</p>
+                <span class="page-ref">Ref: PWR-MOD-01</span>
+            </div>
+        </div>
+
+        <div class="section" id="step2">
+            <div class="card">
+                <h2>Tahrik Sistemi</h2>
+                <p>Fırçasız DC motoru arka aksa monte edin. Bu ünite araca yüksek tork ve manevra kabiliyeti sağlar.</p>
+                <span class="page-ref">Ref: DRV-MTR-X4</span>
+            </div>
+        </div>
+
+        <div class="section" id="step3">
+            <div class="card">
+                <h2>Zırh Panelleri</h2>
+                <p>Kompozit yan panelleri şasiye sabitleyin. Bu paneller iç elektroniği dış etkenlerden korur.</p>
+                <span class="page-ref">Ref: ARM-PLT-02</span>
+            </div>
+        </div>
+
+        <div class="section" id="step4">
+            <div class="card">
+                <h2>Yürüyüş Takımı</h2>
+                <p>Arazi tipi tekerlekleri akslara takın. Bağımsız süspansiyon sistemi zorlu koşullarda stabilite
+                    sağlar.</p>
+                <span class="page-ref">Ref: WHL-OFF-R4</span>
+            </div>
+        </div>
+
+        <div class="section" id="step5">
+            <div class="card">
+                <h2>Sistem Hazır</h2>
+                <p>BARKAN İKA montajı tamamlandı. Tüm sistemler aktif ve göreve hazır.</p>
+                <span class="page-ref">Durum: OPERASYONEL</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import gsap from 'gsap';
+
+        // --- 1. SAHNE KURULUMU ---
+        const scene = new THREE.Scene();
+        // scene.background = new THREE.Color(0x050510); // Handled by CSS gradient
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 5, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.2;
+        bloomPass.strength = 1.2;
+        bloomPass.radius = 0.5;
+        composer.addPass(bloomPass);
+
+        // Lights
+        const ambLight = new THREE.AmbientLight(0x00ffff, 0.2);
+        scene.add(ambLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        const blueLight = new THREE.PointLight(0x00ffff, 2, 20);
+        blueLight.position.set(-5, 5, -5);
+        scene.add(blueLight);
+
+        // Grid (Holographic floor)
+        const grid = new THREE.GridHelper(30, 30, 0x00ffff, 0x003333);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // --- 2. PARÇALAR ---
+        const parts = {};
+        const interactables = [];
+
+        // Materials
+        const matHolo = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            roughness: 0.2,
+            metalness: 0.8,
+            emissive: 0x002244,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        const matDark = new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            roughness: 0.7,
+            metalness: 0.5
+        });
+
+        const matGlow = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.1
+        });
+
+        function createPart(name, mesh) {
+            mesh.userData = { name: name, originalY: mesh.position.y };
+            interactables.push(mesh);
+
+            // Add wireframe glow overlay
+            if (mesh.geometry) {
+                const wire = new THREE.Mesh(mesh.geometry, matGlow);
+                mesh.add(wire);
+            }
+
+            return mesh;
+        }
+
+        // Chassis Group
+        const chassis = new THREE.Group();
+        scene.add(chassis);
+
+        // Battery
+        const batGeo = new THREE.BoxGeometry(2, 0.5, 1.5);
+        parts.battery = createPart("Güç Ünitesi", new THREE.Mesh(batGeo, matHolo));
+        parts.battery.position.set(0, 8, 0);
+        chassis.add(parts.battery);
+
+        // Motor
+        const motorGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 16);
+        const motorMesh = new THREE.Mesh(motorGeo, matDark);
+        motorMesh.rotation.z = Math.PI / 2;
+        parts.motor = createPart("Motor Ünitesi", motorMesh);
+        parts.motor.position.set(0, 8, 1);
+        chassis.add(parts.motor);
+
+        // Panels
+        parts.panels = new THREE.Group();
+        const pGeo = new THREE.BoxGeometry(0.2, 1.2, 5);
+        const p1 = new THREE.Mesh(pGeo, matHolo); p1.position.x = -1.2;
+        const p2 = new THREE.Mesh(pGeo, matHolo); p2.position.x = 1.2;
+        parts.panels.add(createPart("Sol Panel", p1));
+        parts.panels.add(createPart("Sağ Panel", p2));
+        parts.panels.position.set(0, 8, 0);
+        chassis.add(parts.panels);
+
+        // Wheels
+        parts.wheels = new THREE.Group();
+        const wGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.5, 32);
+        const wMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+
+        const wheelPos = [
+            [-1.6, 0, -1.8], [1.6, 0, -1.8],
+            [-1.6, 0, 1.8], [1.6, 0, 1.8]
+        ];
+
+        wheelPos.forEach((pos, i) => {
+            const w = new THREE.Mesh(wGeo, wMat);
+            w.rotation.z = Math.PI / 2;
+            w.position.set(...pos);
+
+            // Tread details
+            const tread = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 8, 32), matHolo);
+            tread.rotation.x = Math.PI / 2;
+            w.add(tread);
+
+            parts.wheels.add(createPart(`Tekerlek ${i + 1}`, w));
+        });
+        parts.wheels.position.set(0, 8, 0);
+        chassis.add(parts.wheels);
+
+        // Main Body (Base)
+        const bodyGeo = new THREE.BoxGeometry(2, 0.5, 4);
+        const body = new THREE.Mesh(bodyGeo, matDark);
+        chassis.add(body);
+
+
+        // --- 3. ANIMASYONLAR ---
+        const animations = [
+            { // 0: Intro
+                camPos: { x: 0, y: 5, z: 12 },
+                camLook: { x: 0, y: 0, z: 0 },
+                action: () => { }
+            },
+            { // 1: Battery
+                camPos: { x: 4, y: 4, z: 4 },
+                camLook: { x: 0, y: 0, z: 0 },
+                action: () => {
+                    gsap.to(parts.battery.position, { y: 0.6, duration: 1, ease: "power2.out" });
+                }
+            },
+            { // 2: Motor
+                camPos: { x: -4, y: 3, z: 5 },
+                camLook: { x: 0, y: 0, z: 1 },
+                action: () => {
+                    gsap.to(parts.motor.position, { y: 0.6, duration: 1, ease: "back.out(1.7)" });
+                }
+            },
+            { // 3: Panels
+                camPos: { x: 6, y: 2, z: 0 },
+                camLook: { x: 0, y: 0, z: 0 },
+                action: () => {
+                    gsap.to(parts.panels.position, { y: 0, duration: 1, ease: "power2.out" });
+                }
+            },
+            { // 4: Wheels
+                camPos: { x: 0, y: 8, z: 0 },
+                camLook: { x: 0, y: 0, z: 0 },
+                action: () => {
+                    gsap.to(parts.wheels.position, { y: 0, duration: 1, stagger: 0.1, ease: "bounce.out" });
+                }
+            },
+            { // 5: Finish
+                camPos: { x: 8, y: 5, z: 8 },
+                camLook: { x: 0, y: 0, z: 0 },
+                action: () => {
+                    gsap.to(chassis.rotation, { y: Math.PI * 2, duration: 20, repeat: -1, ease: "none" });
+                }
+            }
+        ];
+
+        // Scroll Logic
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('.section');
+            const scrollPos = window.pageYOffset;
+            const winHeight = window.innerHeight;
+            const totalHeight = document.body.scrollHeight - winHeight;
+
+            document.getElementById('progress-bar').style.width = (scrollPos / totalHeight * 100) + "%";
+
+            sections.forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top < winHeight / 2 && rect.bottom > winHeight / 2) {
+                    if (!section.classList.contains('active')) {
+                        section.classList.add('active');
+                        triggerStep(index);
+                    }
+                } else {
+                    section.classList.remove('active');
+                }
+            });
+        });
+
+        let currentStep = -1;
+        function triggerStep(index) {
+            if (index === currentStep) return;
+            currentStep = index;
+
+            if (animations[index]) {
+                const anim = animations[index];
+                gsap.to(camera.position, {
+                    x: anim.camPos.x, y: anim.camPos.y, z: anim.camPos.z,
+                    duration: 1.5,
+                    onUpdate: () => camera.lookAt(anim.camLook.x, anim.camLook.y, anim.camLook.z)
+                });
+                anim.action();
+            }
+        }
+
+        // --- 4. INTERACTION ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            // Flatten interactables array (handle groups)
+            const targets = [];
+            interactables.forEach(obj => {
+                if (obj.isGroup) targets.push(...obj.children);
+                else targets.push(obj);
+            });
+
+            const intersects = raycaster.intersectObjects(targets);
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                const name = obj.userData.name || (obj.parent && obj.parent.userData.name);
+
+                if (name) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.clientX + 15 + 'px';
+                    tooltip.style.top = event.clientY + 15 + 'px';
+                    tooltip.innerText = name;
+                    document.body.style.cursor = 'pointer';
+
+                    // Highlight effect (simple scale pulse)
+                    // obj.scale.setScalar(1.1); // Can be glitchy if not handled carefully
+                }
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+        });
+
+        // Explode View
+        let isExploded = false;
+        document.getElementById('toggle-explode').addEventListener('click', () => {
+            isExploded = !isExploded;
+            const factor = isExploded ? 2 : 0; // Expansion factor
+
+            // Simple explode logic: move parts away from center
+            // This assumes parts are already at assembled positions (0,0,0 relative to parent usually)
+            // But we animated them to positions.
+
+            // Actually, let's just move the groups we created
+            gsap.to(parts.battery.position, { y: isExploded ? 3 : 0.6, duration: 0.5 });
+            gsap.to(parts.panels.children[0].position, { x: isExploded ? -3 : -1.2, duration: 0.5 });
+            gsap.to(parts.panels.children[1].position, { x: isExploded ? 3 : 1.2, duration: 0.5 });
+            gsap.to(parts.wheels.position, { y: isExploded ? -2 : 0, duration: 0.5 });
+        });
+
+        // Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            composer.render();
+        }
+        animate();
+        triggerStep(0);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>

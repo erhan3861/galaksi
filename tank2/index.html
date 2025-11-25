@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BARKAN Montaj Atölyesi ve Test Sürüşü</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #333;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* UI Katmanı */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Üst Bilgi Paneli */
+        #header {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            pointer-events: auto;
+            border-bottom: 2px solid #d35400;
+        }
+
+        #instruction-box {
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 8px;
+            max-width: 350px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+            align-self: flex-start;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+            color: #d35400;
+        }
+
+        /* Alt Kontrol Paneli */
+        #controls {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
+            border-top: 2px solid #d35400;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #27ae60;
+            color: white;
+            transition: background 0.3s, transform 0.1s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #2ecc71;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            background-color: #7f8c8d;
+            cursor: not-allowed;
+        }
+
+        #part-inventory {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .part-item {
+            width: 70px;
+            height: 70px;
+            background: #ecf0f1;
+            border: 3px solid #bdc3c7;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .part-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .part-item.selected {
+            border-color: #e67e22;
+            background: #f39c12;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Joystick Zone for Test Drive */
+        #joystick-zone {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+            display: none;
+        }
+
+        #fire-btn {
+            position: absolute;
+            bottom: 50px;
+            right: 50px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 0, 0, 0.6);
+            border: 4px solid white;
+            border-radius: 50%;
+            display: none;
+            pointer-events: auto;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            color: white;
+            user-select: none;
+        }
+
+        #fire-btn:active {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js",
+                "nipplejs": "https://cdn.skypack.dev/nipplejs"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div id="header">
+            <h1>BARKAN Montaj Atölyesi</h1>
+            <div id="progress">Adım: <span id="step-indicator">1</span>/4</div>
+        </div>
+
+        <div id="instruction-box">
+            <h2 id="step-title">Hazırlık</h2>
+            <p id="step-desc">Montaja başlamak için hazır mısınız?</p>
+        </div>
+
+        <div id="controls">
+            <div id="part-inventory"></div>
+            <button id="btn-action" onclick="executeAssembly()">Monte Et</button>
+        </div>
+
+        <div id="joystick-zone"></div>
+        <div id="fire-btn" onpointerdown="fireCannon()">🔥</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import * as CANNON from 'cannon-es';
+        import nipplejs from 'nipplejs';
+
+        // --- 1. TEMEL KURULUM ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2c3e50);
+        scene.fog = new THREE.Fog(0x2c3e50, 10, 60);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Işıklandırma
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        scene.add(dirLight);
+
+        // Zemin (Grid)
+        const gridHelper = new THREE.GridHelper(20, 20);
+        scene.add(gridHelper);
+
+        // Floor Plane
+        const floorGeo = new THREE.PlaneGeometry(100, 100);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x34495e });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Mouse Kontrolleri
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // --- 2. OYUN VERİLERİ ---
+        const woodMaterial = new THREE.MeshStandardMaterial({ color: 0xD2B48C });
+        const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x95a5a6 });
+        const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x34495e });
+        const ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.5 });
+
+        let partsInScene = [];
+        let currentStepIndex = 0;
+        let isDrivingMode = false;
+        let vehicle, world; // Physics
+        let input = { x: 0, y: 0 };
+
+        const steps = [
+            {
+                title: "Adım 1: Pil Yatağı",
+                desc: "Pilleri pil yatağına yerleştirelim. Pilin düz ucu telli kısma gelmeli.",
+                requiredPart: "battery_pack",
+                ghostGeometry: new THREE.BoxGeometry(1.5, 0.5, 1),
+                ghostPosition: { x: 0, y: 0.25, z: 0 },
+                finalMaterial: batteryMaterial
+            },
+            {
+                title: "Adım 2: Motor Bağlantısı",
+                desc: "Motorun delik şeklindeki bakır ucuna kabloları geçirelim.",
+                requiredPart: "dc_motor",
+                ghostGeometry: new THREE.CylinderGeometry(0.3, 0.3, 1, 32),
+                ghostPosition: { x: 0, y: 0.8, z: 0.8 },
+                ghostRotation: { x: 0, y: 0, z: Math.PI / 2 },
+                finalMaterial: metalMaterial
+            },
+            {
+                title: "Adım 3: Gövde Yan Panelleri",
+                desc: "Yan ahşap panelleri birleştirelim. Parçaları sonuna kadar ittiğinden emin ol.",
+                requiredPart: "side_panel",
+                ghostGeometry: new THREE.BoxGeometry(0.2, 2, 4),
+                ghostPosition: { x: 1.5, y: 1, z: 0 },
+                finalMaterial: woodMaterial
+            },
+            {
+                title: "Adım 4: Çarklı Tekerlekler",
+                desc: "Çatal şeklindeki ucu tekerin ortasından geçir. Tekerlek rahat dönmeli.",
+                requiredPart: "gear_wheel",
+                ghostGeometry: new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16),
+                ghostPosition: { x: 1.7, y: 0.5, z: 1.5 },
+                ghostRotation: { x: 0, y: 0, z: Math.PI / 2 },
+                finalMaterial: woodMaterial
+            }
+        ];
+
+        const inventory = [
+            { id: "battery_pack", name: "Pil Yatağı" },
+            { id: "dc_motor", name: "DC Motor" },
+            { id: "side_panel", name: "Yan Panel" },
+            { id: "gear_wheel", name: "Çark Teker" },
+            { id: "screw", name: "Vida T" }
+        ];
+
+        // --- 3. SİMÜLASYON MANTIĞI ---
+        let ghostMesh = null;
+        let selectedPartId = null;
+        let isAnimating = false;
+        let tankGroup = new THREE.Group();
+        scene.add(tankGroup);
+
+        function initGame() {
+            loadStep(0);
+            renderInventory();
+
+            // Expose functions
+            window.executeAssembly = executeAssembly;
+            window.selectPart = selectPart;
+            window.fireCannon = fireCannon;
+        }
+
+        function loadStep(index) {
+            currentStepIndex = index;
+            const stepData = steps[index];
+
+            document.getElementById('step-indicator').innerText = index + 1;
+            document.getElementById('step-title').innerText = stepData.title;
+            document.getElementById('step-desc').innerText = stepData.desc;
+            document.getElementById('btn-action').disabled = true;
+            document.getElementById('btn-action').innerText = "Monte Et";
+
+            if (ghostMesh) scene.remove(ghostMesh);
+
+            ghostMesh = new THREE.Mesh(stepData.ghostGeometry, ghostMaterial);
+            ghostMesh.position.set(stepData.ghostPosition.x, stepData.ghostPosition.y, stepData.ghostPosition.z);
+            if (stepData.ghostRotation) {
+                ghostMesh.rotation.set(stepData.ghostRotation.x, stepData.ghostRotation.y, stepData.ghostRotation.z);
+            }
+            scene.add(ghostMesh);
+        }
+
+        function renderInventory() {
+            const container = document.getElementById('part-inventory');
+            container.innerHTML = '';
+
+            inventory.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'part-item';
+                div.innerText = item.name;
+                div.onclick = () => selectPart(item.id, div);
+                container.appendChild(div);
+            });
+        }
+
+        function selectPart(partId, element) {
+            if (isAnimating) return;
+
+            document.querySelectorAll('.part-item').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+
+            selectedPartId = partId;
+
+            const currentStepData = steps[currentStepIndex];
+            const btn = document.getElementById('btn-action');
+
+            if (partId === currentStepData.requiredPart) {
+                btn.disabled = false;
+                btn.style.backgroundColor = "#27ae60";
+            } else {
+                btn.disabled = true;
+                btn.style.backgroundColor = "#95a5a6";
+            }
+        }
+
+        function executeAssembly() {
+            if (!selectedPartId) return;
+            isAnimating = true;
+
+            const stepData = steps[currentStepIndex];
+
+            const finalMesh = new THREE.Mesh(stepData.ghostGeometry, stepData.finalMaterial);
+            finalMesh.position.set(0, 5, 0);
+            if (stepData.ghostRotation) {
+                finalMesh.rotation.set(stepData.ghostRotation.x, stepData.ghostRotation.y, stepData.ghostRotation.z);
+            }
+            finalMesh.castShadow = true;
+            tankGroup.add(finalMesh); // Add to tank group
+            partsInScene.push(finalMesh);
+
+            const targetPos = stepData.ghostPosition;
+            const animateAssembly = () => {
+                const speed = 0.1;
+                finalMesh.position.lerp(new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z), speed);
+
+                if (finalMesh.position.distanceTo(new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z)) < 0.05) {
+                    finalMesh.position.set(targetPos.x, targetPos.y, targetPos.z);
+                    scene.remove(ghostMesh);
+                    isAnimating = false;
+                    nextStep();
+                    return;
+                }
+                requestAnimationFrame(animateAssembly);
+            };
+            animateAssembly();
+        }
+
+        function nextStep() {
+            if (currentStepIndex < steps.length - 1) {
+                setTimeout(() => {
+                    loadStep(currentStepIndex + 1);
+                    selectedPartId = null;
+                    document.querySelectorAll('.part-item').forEach(el => el.classList.remove('selected'));
+                }, 500);
+            } else {
+                startTestDrive();
+            }
+        }
+
+        function startTestDrive() {
+            isDrivingMode = true;
+
+            // UI Update
+            document.getElementById('step-title').innerText = "TEST SÜRÜŞÜ";
+            document.getElementById('step-desc').innerText = "Aracı joystick ile kontrol et ve hedefleri vur!";
+            document.getElementById('controls').style.display = 'none';
+            document.getElementById('joystick-zone').style.display = 'block';
+            document.getElementById('fire-btn').style.display = 'flex';
+
+            // Physics Init
+            initPhysics();
+
+            // Add Turret to Tank
+            const turretGeo = new THREE.BoxGeometry(1, 0.5, 1);
+            const turretMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const turret = new THREE.Mesh(turretGeo, turretMat);
+            turret.position.y = 2;
+            tankGroup.add(turret);
+
+            const barrelGeo = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
+            const barrel = new THREE.Mesh(barrelGeo, turretMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.z = 1;
+            turret.add(barrel);
+
+            // Add Targets
+            for (let i = 0; i < 5; i++) {
+                createTarget();
+            }
+
+            // Joystick
+            const manager = nipplejs.create({
+                zone: document.getElementById('joystick-zone'),
+                mode: 'static',
+                position: { left: '50%', top: '50%' },
+                color: 'white'
+            });
+
+            manager.on('move', (evt, data) => {
+                if (data && data.vector) {
+                    input.x = data.vector.x;
+                    input.y = data.vector.y;
+                }
+            });
+
+            manager.on('end', () => {
+                input.x = 0;
+                input.y = 0;
+            });
+        }
+
+        function initPhysics() {
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+
+            // Ground
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+            world.addBody(groundBody);
+
+            // Vehicle
+            const chassisShape = new CANNON.Box(new CANNON.Vec3(1.5, 1, 2));
+            const chassisBody = new CANNON.Body({ mass: 150 });
+            chassisBody.addShape(chassisShape, new CANNON.Vec3(0, 1, 0));
+            chassisBody.position.set(0, 2, 0);
+            world.addBody(chassisBody);
+
+            vehicle = new CANNON.RaycastVehicle({
+                chassisBody: chassisBody,
+            });
+
+            const wheelOptions = {
+                radius: 0.8,
+                directionLocal: new CANNON.Vec3(0, -1, 0),
+                suspensionStiffness: 30,
+                suspensionRestLength: 0.3,
+                frictionSlip: 1.4,
+                dampingRelaxation: 2.3,
+                dampingCompression: 4.4,
+                maxSuspensionForce: 100000,
+                rollInfluence: 0.01,
+                axleLocal: new CANNON.Vec3(1, 0, 0),
+                chassisConnectionPointLocal: new CANNON.Vec3(1, 1, 0),
+                maxSuspensionTravel: 0.3,
+                customSlidingRotationalSpeed: -30,
+                useCustomSlidingRotationalSpeed: true
+            };
+
+            vehicle.addWheel({ ...wheelOptions, chassisConnectionPointLocal: new CANNON.Vec3(1.5, 0, -1.5) });
+            vehicle.addWheel({ ...wheelOptions, chassisConnectionPointLocal: new CANNON.Vec3(-1.5, 0, -1.5) });
+            vehicle.addWheel({ ...wheelOptions, chassisConnectionPointLocal: new CANNON.Vec3(1.5, 0, 1.5) });
+            vehicle.addWheel({ ...wheelOptions, chassisConnectionPointLocal: new CANNON.Vec3(-1.5, 0, 1.5) });
+
+            vehicle.addToWorld(world);
+
+            // Sync Visuals
+            // We attach the entire tankGroup to the chassis
+        }
+
+        function createTarget() {
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set((Math.random() - 0.5) * 40, 0.5, (Math.random() - 0.5) * 40);
+            mesh.castShadow = true;
+            scene.add(mesh);
+
+            const body = new CANNON.Body({ mass: 5, shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)) });
+            body.position.copy(mesh.position);
+            world.addBody(body);
+
+            mesh.userData.body = body;
+            partsInScene.push(mesh); // Reuse array for update loop
+        }
+
+        function fireCannon() {
+            if (!isDrivingMode) return;
+
+            const ballGeo = new THREE.SphereGeometry(0.3);
+            const ballMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const ball = new THREE.Mesh(ballGeo, ballMat);
+
+            const pos = tankGroup.position.clone();
+            pos.y += 2;
+            // Forward vector based on rotation
+            const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(tankGroup.quaternion);
+            pos.add(forward.multiplyScalar(2));
+
+            ball.position.copy(pos);
+            scene.add(ball);
+
+            const body = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.3) });
+            body.position.copy(pos);
+            body.velocity.copy(forward.multiplyScalar(20)); // Shoot!
+            world.addBody(body);
+
+            ball.userData.body = body;
+            partsInScene.push(ball);
+        }
+
+        // --- 4. LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isDrivingMode && world) {
+                world.step(1 / 60);
+
+                // Drive
+                const maxForce = 200;
+                const maxSteer = 0.5;
+
+                if (input.y > 0.1) {
+                    vehicle.applyEngineForce(-maxForce * input.y, 2);
+                    vehicle.applyEngineForce(-maxForce * input.y, 3);
+                } else if (input.y < -0.1) {
+                    vehicle.applyEngineForce(-maxForce * input.y, 2);
+                    vehicle.applyEngineForce(-maxForce * input.y, 3);
+                } else {
+                    vehicle.applyEngineForce(0, 2);
+                    vehicle.applyEngineForce(0, 3);
+                }
+
+                if (Math.abs(input.x) > 0.1) {
+                    vehicle.setSteeringValue(-maxSteer * input.x, 0);
+                    vehicle.setSteeringValue(-maxSteer * input.x, 1);
+                } else {
+                    vehicle.setSteeringValue(0, 0);
+                    vehicle.setSteeringValue(0, 1);
+                }
+
+                // Sync Tank Group
+                tankGroup.position.copy(vehicle.chassisBody.position);
+                tankGroup.quaternion.copy(vehicle.chassisBody.quaternion);
+
+                // Camera Follow
+                const relativeCameraOffset = new THREE.Vector3(0, 8, -12);
+                const cameraOffset = relativeCameraOffset.applyMatrix4(tankGroup.matrixWorld);
+                camera.position.lerp(cameraOffset, 0.1);
+                camera.lookAt(tankGroup.position);
+
+                // Update Physics Objects
+                partsInScene.forEach(p => {
+                    if (p.userData.body) {
+                        p.position.copy(p.userData.body.position);
+                        p.quaternion.copy(p.userData.body.quaternion);
+                    }
+                });
+            } else {
+                controls.update();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Güneş Enerjili Uçak</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #87CEEB;
+            user-select: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .energy-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .energy-bar-wrapper {
+            width: 300px;
+            height: 25px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 2px solid #555;
+            position: relative;
+        }
+
+        .energy-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #FF3D00, #FFD600, #00E676);
+            transition: width 0.2s ease-out;
+            box-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+        }
+
+        .energy-icon {
+            font-size: 24px;
+            color: #FFD700;
+            text-shadow: 0 0 10px #FFD700;
+        }
+
+        .score-board {
+            font-size: 28px;
+            color: white;
+            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.2);
+            padding: 5px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #start-screen,
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            pointer-events: auto;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .big-btn {
+            background: #FFD700;
+            color: #333;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            border-radius: 60px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            margin-top: 30px;
+            box-shadow: 0 8px 0 #C97C10;
+            transition: transform 0.1s;
+            font-weight: bold;
+        }
+
+        .big-btn:active {
+            transform: translateY(6px);
+            box-shadow: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #sun-status {
+            font-size: 50px;
+            position: absolute;
+            top: 100px;
+            right: 30px;
+            transition: opacity 0.2s, transform 0.2s;
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
+        }
+
+        .charging-text {
+            position: absolute;
+            top: 160px;
+            right: 20px;
+            color: #00E676;
+            font-size: 18px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="game-container"></div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <div class="energy-container">
+                <span class="energy-icon">⚡</span>
+                <div class="energy-bar-wrapper">
+                    <div id="energy-bar" class="energy-bar"></div>
+                </div>
+            </div>
+            <div class="score-board">Mesafe: <span id="score">0</span>m</div>
+        </div>
+        <div id="sun-status">☀️</div>
+        <div id="charging-text" class="charging-text">ŞARJ OLUYOR...</div>
+    </div>
+
+    <div id="start-screen">
+        <h1
+            style="font-size: 5rem; margin: 0; color: #FFD700; text-shadow: 4px 4px 0 #FF9F1C; -webkit-text-stroke: 2px #E65100;">
+            Güneş Uçağı</h1>
+        <p style="font-size: 2rem; margin-top: 10px;">Bulutlardan kaç, enerjini koru! ✈️</p>
+        <button class="big-btn" id="start-btn">UÇUŞA BAŞLA ▶</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 style="font-size: 4rem; color: #FF6B6B; text-shadow: 3px 3px 0 #fff;">ENERJİ BİTTİ!</h1>
+        <p style="font-size: 2rem;">Toplam Mesafe: <span id="final-score">0</span>m</p>
+        <button class="big-btn" id="restart-btn">TEKRAR DENE ↺</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer;
+        let planeGroup, prop;
+        let clouds = [];
+        let particles = [];
+        let energy = 100;
+        let score = 0;
+        let isGameActive = false;
+        let speed = 0.5;
+
+        // Input
+        const mouse = new THREE.Vector2();
+
+        // Sun logic
+        const sunDir = new THREE.Vector3(0.5, 1, 0.5).normalize(); // Direction TO sun
+        let inSun = true;
+
+        init();
+        animate();
+
+        function init() {
+            // 1. SCENE
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 6, 18);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // LIGHTS
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.copy(sunDir).multiplyScalar(50);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.set(2048, 2048);
+            dirLight.shadow.camera.left = -30;
+            dirLight.shadow.camera.right = 30;
+            dirLight.shadow.camera.top = 30;
+            dirLight.shadow.camera.bottom = -30;
+            scene.add(dirLight);
+
+            // 2. OBJECTS
+            createPlane();
+            createClouds();
+            createGround();
+
+            // 3. EVENTS
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+        }
+
+        function createPlane() {
+            planeGroup = new THREE.Group();
+            scene.add(planeGroup);
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.4 });
+            const solarMat = new THREE.MeshStandardMaterial({ color: 0x00008B, roughness: 0.2, metalness: 0.8, emissive: 0x000033 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x87CEEB, roughness: 0.1, metalness: 0.9, opacity: 0.7, transparent: true });
+
+            // Fuselage (Streamlined)
+            const bodyGeo = new THREE.CapsuleGeometry(0.6, 4, 4, 8);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.rotation.x = Math.PI / 2;
+            planeGroup.add(body);
+
+            // Cockpit
+            const cockpitGeo = new THREE.CapsuleGeometry(0.5, 1.5, 4, 8);
+            const cockpit = new THREE.Mesh(cockpitGeo, glassMat);
+            cockpit.rotation.x = Math.PI / 2;
+            cockpit.position.set(0, 0.4, -0.5);
+            planeGroup.add(cockpit);
+
+            // Wings (Long Glider Wings)
+            const wingGeo = new THREE.BoxGeometry(12, 0.2, 1.5);
+            const wings = new THREE.Mesh(wingGeo, bodyMat);
+            wings.position.set(0, 0.2, 0.5);
+            planeGroup.add(wings);
+
+            // Solar Panels (Embedded in wings)
+            const panelGeo = new THREE.PlaneGeometry(5, 1);
+
+            const panelLeft = new THREE.Mesh(panelGeo, solarMat);
+            panelLeft.rotation.x = -Math.PI / 2;
+            panelLeft.position.set(-3, 0.31, 0.5);
+            planeGroup.add(panelLeft);
+
+            const panelRight = new THREE.Mesh(panelGeo, solarMat);
+            panelRight.rotation.x = -Math.PI / 2;
+            panelRight.position.set(3, 0.31, 0.5);
+            planeGroup.add(panelRight);
+
+            // Tail
+            const tailGeo = new THREE.BoxGeometry(3, 0.1, 1.5);
+            const tail = new THREE.Mesh(tailGeo, bodyMat);
+            tail.position.set(0, 0.2, 2.2);
+            planeGroup.add(tail);
+
+            const rudderGeo = new THREE.BoxGeometry(0.1, 1.5, 1);
+            const rudder = new THREE.Mesh(rudderGeo, bodyMat);
+            rudder.position.set(0, 0.8, 2.2);
+            // Skew rudder
+            const pos = rudderGeo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                if (pos.getY(i) > 0) pos.setZ(i, pos.getZ(i) + 0.5);
+            }
+            planeGroup.add(rudder);
+
+            // Propeller (Front)
+            const propGeo = new THREE.BoxGeometry(3.5, 0.1, 0.05);
+            const propMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            prop = new THREE.Mesh(propGeo, propMat);
+            prop.position.z = -2.1;
+            planeGroup.add(prop);
+
+            // Propeller Spinner
+            const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.5, 16), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            spinner.rotation.x = -Math.PI / 2;
+            spinner.position.z = -2.1;
+            planeGroup.add(spinner);
+        }
+
+        function createClouds() {
+            const cloudGeo = new THREE.SphereGeometry(1, 8, 8);
+            const cloudMat = new THREE.MeshStandardMaterial({
+                color: 0xFFFFFF,
+                transparent: true,
+                opacity: 0.85,
+                flatShading: true
+            });
+
+            for (let i = 0; i < 20; i++) {
+                const group = new THREE.Group();
+                const blobs = 4 + Math.floor(Math.random() * 4);
+
+                for (let j = 0; j < blobs; j++) {
+                    const mesh = new THREE.Mesh(cloudGeo, cloudMat);
+                    mesh.position.set(
+                        (Math.random() - 0.5) * 2.5,
+                        (Math.random() - 0.5) * 1.5,
+                        (Math.random() - 0.5) * 2.5
+                    );
+                    mesh.scale.setScalar(0.8 + Math.random() * 0.5);
+                    mesh.castShadow = true;
+                    group.add(mesh);
+                }
+
+                resetCloud(group, true);
+                scene.add(group);
+                clouds.push(group);
+            }
+        }
+
+        function resetCloud(cloud, randomZ) {
+            cloud.position.x = (Math.random() - 0.5) * 40;
+            // Clouds high up to cast shadow
+            cloud.position.y = 8 + Math.random() * 6;
+
+            if (randomZ) {
+                cloud.position.z = -50 + Math.random() * 40;
+            } else {
+                cloud.position.z = -80 - Math.random() * 20;
+            }
+
+            cloud.scale.setScalar(2 + Math.random() * 2);
+            cloud.rotation.y = Math.random() * Math.PI;
+        }
+
+        function createGround() {
+            const geo = new THREE.PlaneGeometry(400, 400);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x4CAF50 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = -25;
+            scene.add(mesh);
+
+            // Add some low poly trees or hills?
+            // Simple hills
+            const hillGeo = new THREE.ConeGeometry(10, 15, 4);
+            const hillMat = new THREE.MeshBasicMaterial({ color: 0x388E3C });
+            for (let i = 0; i < 20; i++) {
+                const hill = new THREE.Mesh(hillGeo, hillMat);
+                hill.position.set(
+                    (Math.random() - 0.5) * 300,
+                    -20,
+                    (Math.random() - 0.5) * 300
+                );
+                scene.add(hill);
+            }
+        }
+
+        function createChargingParticles() {
+            if (Math.random() > 0.3) return; // Limit spawn rate
+            const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+            const p = new THREE.Mesh(geo, mat);
+
+            // Spawn on wings
+            const offset = (Math.random() - 0.5) * 6;
+            p.position.set(offset, 0.5, 0);
+            p.position.applyMatrix4(planeGroup.matrixWorld);
+
+            p.vel = new THREE.Vector3(0, 0.1, 0);
+            p.life = 1.0;
+            scene.add(p);
+            particles.push(p);
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault();
+            mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            isGameActive = true;
+            energy = 100;
+            score = 0;
+            planeGroup.position.set(0, 0, 0);
+            planeGroup.rotation.set(0, 0, 0);
+            clouds.forEach(c => resetCloud(c, true));
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function checkSunlight() {
+            const raycaster = new THREE.Raycaster(planeGroup.position, sunDir);
+            let cloudMeshes = [];
+            clouds.forEach(g => cloudMeshes.push(...g.children));
+            const intersects = raycaster.intersectObjects(cloudMeshes);
+            return intersects.length === 0;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameActive) {
+                // 1. Move Plane
+                const targetX = mouse.x * 12;
+                const targetY = mouse.y * 6;
+
+                planeGroup.position.x += (targetX - planeGroup.position.x) * 0.08;
+                planeGroup.position.y += (targetY - planeGroup.position.y) * 0.08;
+
+                // Bank/Pitch
+                planeGroup.rotation.z = -(targetX - planeGroup.position.x) * 0.15;
+                planeGroup.rotation.x = (targetY - planeGroup.position.y) * 0.1;
+
+                // 2. Move Clouds
+                clouds.forEach(c => {
+                    c.position.z += speed;
+                    if (c.position.z > 20) {
+                        resetCloud(c, false);
+                    }
+                });
+
+                // 3. Check Sun
+                inSun = checkSunlight();
+                const sunStatusEl = document.getElementById('sun-status');
+                const chargingText = document.getElementById('charging-text');
+
+                if (inSun) {
+                    energy = Math.min(100, energy + 0.3);
+                    sunStatusEl.innerText = "☀️";
+                    sunStatusEl.style.opacity = 1;
+                    sunStatusEl.style.transform = "scale(1.2)";
+                    chargingText.style.opacity = 1;
+                    prop.rotation.z += 0.8;
+                    createChargingParticles();
+                } else {
+                    energy = Math.max(0, energy - 0.4);
+                    sunStatusEl.innerText = "☁️";
+                    sunStatusEl.style.opacity = 0.5;
+                    sunStatusEl.style.transform = "scale(1.0)";
+                    chargingText.style.opacity = 0;
+                    prop.rotation.z += 0.2;
+                }
+
+                // 4. Update UI
+                const bar = document.getElementById('energy-bar');
+                bar.style.width = energy + '%';
+
+                // Color change based on energy
+                if (energy > 50) bar.style.background = 'linear-gradient(90deg, #FFD600, #00E676)';
+                else if (energy > 20) bar.style.background = 'linear-gradient(90deg, #FF9100, #FFD600)';
+                else bar.style.background = '#FF3D00';
+
+                score += 1;
+                document.getElementById('score').innerText = Math.floor(score / 10);
+
+                // 5. Game Over
+                if (energy <= 0) {
+                    isGameActive = false;
+                    document.getElementById('final-score').innerText = Math.floor(score / 10);
+                    document.getElementById('game-over-screen').classList.remove('hidden');
+                }
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.add(p.vel);
+                p.life -= 0.05;
+                p.scale.setScalar(p.life);
+                if (p.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

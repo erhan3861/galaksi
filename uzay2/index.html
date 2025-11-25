@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uzay Macerası 2.0</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .score-board {
+            color: #00D2FF;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00D2FF;
+            background: rgba(0, 20, 40, 0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 210, 255, 0.3);
+        }
+
+        .health-container {
+            display: flex;
+            gap: 5px;
+        }
+
+        .heart {
+            font-size: 30px;
+            color: #FF0055;
+            filter: drop-shadow(0 0 5px #FF0055);
+            transition: opacity 0.3s, filter 0.3s;
+        }
+
+        .heart.lost {
+            opacity: 0.2;
+            filter: grayscale(100%);
+        }
+
+        .mute-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+
+        .mute-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 210, 255, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: rgba(0, 210, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .ingame-controls {
+            align-self: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: none;
+            /* Hidden initially */
+            align-items: center;
+            gap: 10px;
+        }
+
+        #start-screen,
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 10;
+            background: rgba(0, 10, 30, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 2px solid #00D2FF;
+            box-shadow: 0 0 50px rgba(0, 210, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #game-over {
+            display: none;
+            border-color: #FF0055;
+            box-shadow: 0 0 50px rgba(255, 0, 85, 0.3);
+        }
+
+        h1.title {
+            font-size: 64px;
+            margin: 0;
+            background: linear-gradient(45deg, #00D2FF, #FF0055);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(0, 210, 255, 0.5));
+        }
+
+        p.subtitle {
+            font-size: 20px;
+            color: #AAA;
+            margin: 0;
+        }
+
+        button {
+            background: linear-gradient(90deg, #00D2FF, #0077AA);
+            border: none;
+            padding: 15px 40px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.6);
+        }
+
+        .controls-visual {
+            display: flex;
+            gap: 40px;
+            margin: 20px 0;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .key-icon {
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .control-label {
+            font-size: 14px;
+            color: #CCC;
+        }
+
+        #flash-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #FF0000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+            z-index: 5;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="score-board">SKOR: <span id="score">0</span></div>
+            <div class="health-container" id="health-container">
+                <!-- Hearts injected by JS -->
+            </div>
+            <button class="mute-btn" id="mute-btn" title="Sesi Aç/Kapat">🔊</button>
+        </div>
+
+        <div class="crosshair"></div>
+
+        <div class="ingame-controls" id="ingame-controls">
+            <span>⬅️</span> <span>Yön Tuşları ile Kaçın!</span> <span>➡️</span>
+            <span style="margin-left: 20px;">SPACE</span> <span>Ateş Et!</span>
+        </div>
+    </div>
+
+    <div id="flash-overlay"></div>
+
+    <div id="start-screen">
+        <h1 class="title">UZAY MACERASI 2.0 🚀</h1>
+        <p class="subtitle">Yıldızları topla, meteorlardan kaç!</p>
+
+        <div class="controls-visual">
+            <div class="control-group">
+                <div style="display:flex; gap:20px;">
+                    <div class="key-icon">⬅️</div>
+                    <div class="key-icon">➡️</div>
+                </div>
+                <div class="control-label">Uzay Gemisini Sür</div>
+            </div>
+            <div class="control-group">
+                <div class="key-icon" style="width: 100px;">SPACE</div>
+                <div class="control-label">Ateş Et!</div>
+            </div>
+        </div>
+
+        <button id="play-btn">UÇUŞA BAŞLA ▶</button>
+    </div>
+
+    <div id="game-over">
+        <h1>KAZA! 💥</h1>
+        <p style="font-size: 24px; color: #E0E0FF; margin-bottom: 30px;">Toplam Yıldız: <span id="final-score"
+                style="color: #FFD700; font-weight:bold;">0</span></p>
+        <button id="restart-btn">Tekrar Dene 🔁</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Sound Manager (Web Audio API) ---
+        class SoundManager {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.isMuted = false;
+            }
+
+            playShoot() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.1);
+
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playExplosion() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.2);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playCollect() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.1);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            playCrash() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.3);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            playDamage() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playHeal() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, this.ctx.currentTime + 0.1);
+                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.2);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            playGameOver() {
+                if (this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 1.0);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 1.0);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 1.0);
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                return this.isMuted;
+            }
+        }
+
+        // --- Game Variables ---
+        let scene, camera, renderer;
+        let ship;
+        let stars = [];
+        let asteroids = [];
+        let bullets = [];
+        let backgroundStars = [];
+        let score = 0;
+        let maxHealth = 5;
+        let currentHealth = 5;
+        let isPlaying = false;
+        let isGameOver = false;
+        let isInvulnerable = false;
+        const soundManager = new SoundManager();
+
+        // Cockpit Animation Variables
+        let blinkTimer = 0;
+        let dashboardLights = []; // Array to store light meshes for blinking
+
+        // 3-Lane System
+        const LANE_WIDTH = 5;
+        const LANES = [-LANE_WIDTH, 0, LANE_WIDTH]; // Left, Center, Right
+        let currentLaneIndex = 1; // Start in Center
+        let targetX = 0;
+
+        // Physics & Effects
+        const speed = 0.4; // Speed of objects moving towards camera
+        const bulletSpeed = 1.0;
+        let shakeIntensity = 0;
+
+        // UI Elements
+        const scoreEl = document.getElementById('score');
+        const healthContainer = document.getElementById('health-container');
+        const gameOverEl = document.getElementById('game-over');
+        const finalScoreEl = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        const playBtn = document.getElementById('play-btn');
+        const startScreen = document.getElementById('start-screen');
+        const muteBtn = document.getElementById('mute-btn');
+        const ingameControls = document.getElementById('ingame-controls');
+        const flashOverlay = document.getElementById('flash-overlay');
+
+        init();
+        animate();
+
+        function init() {
+            // 1. Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0B001A); // Deep Space Purple
+            scene.fog = new THREE.FogExp2(0x0B001A, 0.02);
+
+            // 2. Camera - Cockpit View
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Position camera inside/just above the cockpit
+            camera.position.set(0, 1, 0.3);
+            camera.lookAt(0, 0.3, -10);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // 4. Lights
+            const ambientLight = new THREE.AmbientLight(0x404040, 1.5); // Soft white light
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(5, 10, 5);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0x00D2FF, 1, 20);
+            pointLight.position.set(0, 2, 0);
+            scene.add(pointLight);
+
+            // 5. Objects
+            createStarfield();
+            createShip();
+            updateHealthUI();
+
+            // Initial Spawns
+            for (let i = 0; i < 5; i++) spawnCollectible();
+            for (let i = 0; i < 3; i++) spawnObstacle();
+
+            // 6. Events
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', handleKey);
+
+            playBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', resetGame);
+            muteBtn.addEventListener('click', () => {
+                const muted = soundManager.toggleMute();
+                muteBtn.textContent = muted ? '🔇' : '🔊';
+            });
+        }
+
+        function startGame() {
+            isPlaying = true;
+            startScreen.style.display = 'none';
+            ingameControls.style.display = 'flex';
+
+            if (soundManager.ctx.state === 'suspended') {
+                soundManager.ctx.resume();
+            }
+        }
+
+        function createStarfield() {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+
+            for (let i = 0; i < 1000; i++) {
+                const x = (Math.random() - 0.5) * 200;
+                const y = (Math.random() - 0.5) * 200;
+                const z = -Math.random() * 200;
+                vertices.push(x, y, z);
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 0.8 });
+            const geometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+            geometry.rotateX(Math.PI / 2);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00FF00 });
+            const bullet = new THREE.Mesh(geometry, material);
+
+            bullet.position.copy(ship.position);
+            bullet.position.y += 0.5; // Fire from slightly above center
+            bullet.position.z -= 1.0; // Start slightly in front
+
+            scene.add(bullet);
+            bullets.push(bullet);
+            soundManager.playShoot();
+        }
+
+        function spawnCollectible() {
+            const laneIdx = Math.floor(Math.random() * 3);
+            const xPos = LANES[laneIdx];
+            const isHeart = Math.random() < 0.2; // 20% chance for heart
+
+            let mesh;
+
+            if (isHeart) {
+                // Heart Shape
+                const shape = new THREE.Shape();
+                const x = 0, y = 0;
+                shape.moveTo(x + 0.25, y + 0.25);
+                shape.bezierCurveTo(x + 0.25, y + 0.25, x + 0.20, y, x, y);
+                shape.bezierCurveTo(x - 0.30, y, x - 0.30, y + 0.35, x - 0.30, y + 0.35);
+                shape.bezierCurveTo(x - 0.30, y + 0.55, x - 0.10, y + 0.77, x + 0.25, y + 0.95);
+                shape.bezierCurveTo(x + 0.60, y + 0.77, x + 0.80, y + 0.55, x + 0.80, y + 0.35);
+                shape.bezierCurveTo(x + 0.80, y + 0.35, x + 0.80, y, x + 0.50, y);
+                shape.bezierCurveTo(x + 0.35, y, x + 0.25, y + 0.25, x + 0.25, y + 0.25);
+
+                const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.2, bevelEnabled: false });
+                // Center the heart
+                geo.translate(-0.25, -0.5, 0);
+                geo.scale(0.5, 0.5, 0.5);
+
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0xFF0055,
+                    emissive: 0xFF0000,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.5,
+                    roughness: 0.2
+                });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'heart' };
+            } else {
+                // Star Shape
+                const shape = new THREE.Shape();
+                const outerRadius = 0.6;
+                const innerRadius = 0.3;
+                const spikes = 5;
+
+                for (let i = 0; i < spikes * 2; i++) {
+                    const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                    const a = (Math.PI * i) / spikes;
+                    const x = Math.cos(a) * r;
+                    const y = Math.sin(a) * r;
+                    if (i === 0) shape.moveTo(x, y);
+                    else shape.lineTo(x, y);
+                }
+                shape.closePath();
+
+                const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.2, bevelEnabled: false });
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0xFFD700, // Gold
+                    emissive: 0xFFAA00,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'star' };
+            }
+
+            const z = -40 - (Math.random() * 40);
+            mesh.position.set(xPos, 0, z);
+            scene.add(mesh);
+            stars.push(mesh);
+        }
+
+        function spawnObstacle() {
+            const laneIdx = Math.floor(Math.random() * 3);
+            const xPos = LANES[laneIdx];
+
+            // Asteroid (Icosahedron)
+            const geo = new THREE.IcosahedronGeometry(0.9, 0);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x555555,
+                roughness: 0.9,
+                flatShading: true
+            });
+            const asteroid = new THREE.Mesh(geo, mat);
+
+            // Random rotation speed
+            asteroid.userData = {
+                rotX: (Math.random() - 0.5) * 0.1,
+                rotY: (Math.random() - 0.5) * 0.1
+            };
+
+            const z = -50 - (Math.random() * 50);
+            asteroid.position.set(xPos, 0, z);
+
+            // Scale variation
+            const s = 0.8 + Math.random() * 0.5;
+            asteroid.scale.set(s, s, s);
+
+            scene.add(asteroid);
+            asteroids.push(asteroid);
+        }
+
+        function handleKey(e) {
+            if (!isPlaying || isGameOver) return;
+
+            if (e.code === 'ArrowLeft') {
+                if (currentLaneIndex > 0) {
+                    currentLaneIndex--;
+                    targetX = LANES[currentLaneIndex];
+                }
+            }
+            if (e.code === 'ArrowRight') {
+                if (currentLaneIndex < 2) {
+                    currentLaneIndex++;
+                    targetX = LANES[currentLaneIndex];
+                }
+            }
+            if (e.code === 'Space') {
+                fireBullet();
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function resetGame() {
+            isGameOver = false;
+            isPlaying = true;
+            score = 0;
+            currentHealth = maxHealth;
+            updateHealthUI();
+            scoreEl.textContent = score;
+            gameOverEl.style.display = 'none';
+            flashOverlay.style.opacity = 0;
+
+            currentLaneIndex = 1;
+            targetX = 0;
+
+            if (ship) {
+                ship.position.set(0, 0, 0);
+                ship.rotation.set(0, 0, 0);
+            }
+
+            stars.forEach(s => scene.remove(s));
+            stars = [];
+            asteroids.forEach(a => scene.remove(a));
+            asteroids = [];
+            bullets.forEach(b => scene.remove(b));
+            bullets = [];
+
+            for (let i = 0; i < 5; i++) spawnCollectible();
+            for (let i = 0; i < 3; i++) spawnObstacle();
+        }
+
+        function updateHealthUI() {
+            healthContainer.innerHTML = '';
+            for (let i = 0; i < maxHealth; i++) {
+                const heart = document.createElement('span');
+                heart.className = 'heart';
+                heart.textContent = '❤';
+                if (i >= currentHealth) {
+                    heart.classList.add('lost');
+                }
+                healthContainer.appendChild(heart);
+            }
+        }
+
+        function takeDamage() {
+            if (isInvulnerable) return;
+
+            currentHealth--;
+            updateHealthUI();
+            soundManager.playDamage();
+            triggerCrashEffect();
+
+            if (currentHealth <= 0) {
+                soundManager.playCrash(); // Big crash sound
+                gameOver();
+            } else {
+                // Invulnerability
+                isInvulnerable = true;
+                // Flash ship
+                let flashCount = 0;
+                const flashInterval = setInterval(() => {
+                    ship.visible = !ship.visible;
+                    flashCount++;
+                    if (flashCount > 10) {
+                        clearInterval(flashInterval);
+                        ship.visible = true;
+                        isInvulnerable = false;
+                    }
+                }, 100);
+            }
+        }
+
+        function heal() {
+            if (currentHealth < maxHealth) {
+                currentHealth++;
+                updateHealthUI();
+                soundManager.playHeal();
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Screen Shake Decay
+            if (shakeIntensity > 0) {
+                shakeIntensity -= 0.05;
+                if (shakeIntensity < 0) shakeIntensity = 0;
+                // Shake camera relative to ship (since it's a child now)
+                camera.position.x = (Math.random() - 0.5) * shakeIntensity;
+                camera.position.y = 0.35 + (Math.random() - 0.5) * shakeIntensity;
+            } else {
+                // Stable cockpit view
+                camera.position.set(0, 0.35, 0.3);
+            }
+
+            if (!isPlaying || isGameOver) {
+                // Idle animation for background even when paused
+                backgroundStars.forEach(bg => {
+                    bg.rotation.z += 0.0005;
+                });
+                return;
+            }
+
+            if (ship) {
+                // Smooth Lane Switching (Lerp)
+                ship.position.x += (targetX - ship.position.x) * 0.1;
+
+                // Bank (Tilt) based on movement
+                const tilt = (ship.position.x - targetX) * 0.1;
+                ship.rotation.z = tilt;
+                ship.rotation.y = -tilt * 0.5; // Slight yaw
+
+                // Bobbing effect
+                ship.position.y = Math.sin(Date.now() * 0.005) * 0.2;
+
+                // --- Cockpit Animations ---
+
+                // 1. Radar Sweep
+                if (ship.userData.radarSweep) {
+                    ship.userData.radarSweep.rotation.z -= 0.05;
+                }
+
+                // 2. HUD Ring Rotation
+                if (ship.userData.hudRing) {
+                    ship.userData.hudRing.rotation.z += 0.005;
+                }
+
+                // 3. Blinking Lights
+                blinkTimer++;
+                if (blinkTimer > 20) {
+                    blinkTimer = 0;
+                    // Randomly toggle a light
+                    if (dashboardLights.length > 0) {
+                        const idx = Math.floor(Math.random() * dashboardLights.length);
+                        dashboardLights[idx].visible = !dashboardLights[idx].visible;
+                    }
+                }
+            }
+
+            // Move Objects
+            // Stars / Collectibles
+            for (let i = stars.length - 1; i >= 0; i--) {
+                const star = stars[i];
+                star.position.z += speed;
+                star.rotation.z += 0.05;
+
+                if (ship && star.position.distanceTo(ship.position) < 1.5) {
+                    scene.remove(star);
+                    stars.splice(i, 1);
+
+                    if (star.userData.type === 'heart') {
+                        heal();
+                    } else {
+                        score++;
+                        scoreEl.textContent = score;
+                        soundManager.playCollect();
+                    }
+
+                    spawnCollectible();
+
+                    // Visual pop
+                    const flash = new THREE.PointLight(0xFFD700, 2, 5);
+                    flash.position.copy(star.position);
+                    scene.add(flash);
+                    setTimeout(() => scene.remove(flash), 100);
+                }
+
+                if (star.position.z > 5) {
+                    scene.remove(star);
+                    stars.splice(i, 1);
+                    spawnCollectible();
+                }
+            }
+            if (stars.length < 5) spawnCollectible();
+
+            // Asteroids
+            for (let i = asteroids.length - 1; i >= 0; i--) {
+                const asteroid = asteroids[i];
+                asteroid.position.z += speed;
+                asteroid.rotation.x += asteroid.userData.rotX;
+                asteroid.rotation.y += asteroid.userData.rotY;
+
+                if (ship && asteroid.position.distanceTo(ship.position) < 1.5) {
+                    takeDamage();
+                    // Remove asteroid that hit us
+                    scene.remove(asteroid);
+                    asteroids.splice(i, 1);
+                    spawnObstacle();
+                }
+
+                if (asteroid.position.z > 5) {
+                    scene.remove(asteroid);
+                    asteroids.splice(i, 1);
+                    spawnObstacle();
+                }
+            }
+            if (asteroids.length < 4) spawnObstacle();
+
+            // Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.position.z -= bulletSpeed;
+
+                if (bullet.position.z < -100) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Check collision with asteroids
+                for (let j = asteroids.length - 1; j >= 0; j--) {
+                    const asteroid = asteroids[j];
+                    if (bullet.position.distanceTo(asteroid.position) < 1.5) {
+                        // Hit!
+                        scene.remove(bullet);
+                        bullets.splice(i, 1);
+
+                        scene.remove(asteroid);
+                        asteroids.splice(j, 1);
+
+                        soundManager.playExplosion();
+                        score += 5; // Bonus points for shooting
+                        scoreEl.textContent = score;
+
+                        // Explosion effect
+                        const flash = new THREE.PointLight(0xFF0000, 2, 10);
+                        flash.position.copy(asteroid.position);
+                        scene.add(flash);
+                        setTimeout(() => scene.remove(flash), 100);
+
+                        spawnObstacle();
+                        break; // Bullet used up
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function triggerCrashEffect() {
+            shakeIntensity = 1.5;
+            flashOverlay.style.opacity = 0.8;
+            setTimeout(() => {
+                flashOverlay.style.opacity = 0;
+            }, 150);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            soundManager.playGameOver();
+            finalScoreEl.textContent = score;
+            gameOverEl.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ahşap Labirent Robotu</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #E6E6FA;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            text-align: center;
+            color: #594a42;
+            text-shadow: 2px 2px 0px #fff;
+            margin-top: 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+
+        #wheel-container {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #steering-wheel {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, #8B4513 30%, #A0522D 70%);
+            border-radius: 50%;
+            border: 10px solid #594a42;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        #steering-wheel::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 10px;
+            height: 30px;
+            background: #FFD700;
+            border-radius: 5px;
+        }
+
+        #steering-wheel:active {
+            cursor: grabbing;
+        }
+
+        #start-screen,
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(230, 230, 250, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            border: 5px solid #8B4513;
+            max-width: 90%;
+        }
+
+        .big-btn {
+            background: #2EC4B6;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            margin-top: 20px;
+            box-shadow: 0 6px 0 #1a8a7f;
+            transition: transform 0.1s;
+        }
+
+        .big-btn:active {
+            transform: translateY(6px);
+            box-shadow: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        canvas.confetti {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #hint-text {
+            position: absolute;
+            bottom: 250px;
+            width: 100%;
+            text-align: center;
+            color: #594a42;
+            font-size: 1.2rem;
+            opacity: 0.7;
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js",
+                "canvas-confetti": "https://cdn.skypack.dev/canvas-confetti"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="game-container"></div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <h1>Labirent Robot</h1>
+        </div>
+
+        <div id="hint-text">Direksiyonu çevir! ↔️</div>
+
+        <div id="wheel-container">
+            <div id="steering-wheel"></div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <div class="modal-content">
+            <h1 style="color:#8B4513; font-size: 3rem;">Hoşgeldin!</h1>
+            <p style="font-size: 1.2rem; color: #555;">Labirenti çevirerek topu hedefe ulaştır.</p>
+            <button class="big-btn" id="start-btn">Oyunu Başlat ▶</button>
+        </div>
+    </div>
+
+    <div id="win-screen" class="hidden">
+        <canvas id="confetti-canvas" class="confetti"></canvas>
+        <div class="modal-content">
+            <h1 style="color:#2EC4B6; font-size: 3rem;">Tebrikler! 🎉</h1>
+            <p style="font-size: 1.5rem;">Labirenti başarıyla tamamladın.</p>
+            <button class="big-btn" id="restart-btn">Tekrar Oyna ↺</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import confetti from 'canvas-confetti';
+
+        let scene, camera, renderer, world;
+        let ballMesh, ballBody;
+        let boardGroup, boardBody;
+        let standGroup;
+        let strings = [];
+        let currentRotation = 0;
+        let targetRotation = 0;
+        let isGameActive = false;
+
+        // Maze Design
+        const mazeDesign = [
+            [3.0, 90, 45],
+            [5.0, 270, 45],
+            [7.0, 0, 45],
+            [9.0, 180, 45],
+        ];
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xE6E6FA);
+            scene.fog = new THREE.Fog(0xE6E6FA, 20, 60);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 0, 35);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 10, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.set(2048, 2048);
+            scene.add(dirLight);
+
+            // Physics World
+            world = new CANNON.World();
+            world.gravity.set(0, -25, 0);
+
+            const woodMaterial = new CANNON.Material('wood');
+            const ballMaterial = new CANNON.Material('ball');
+            const glassMaterial = new CANNON.Material('glass');
+
+            const woodBallContact = new CANNON.ContactMaterial(woodMaterial, ballMaterial, {
+                friction: 0.3,
+                restitution: 0.2,
+            });
+            const glassBallContact = new CANNON.ContactMaterial(glassMaterial, ballMaterial, {
+                friction: 0.0,
+                restitution: 0.1
+            });
+
+            world.addContactMaterial(woodBallContact);
+            world.addContactMaterial(glassBallContact);
+
+            createStand();
+            createBoard(woodMaterial, glassMaterial);
+            createBall(ballMaterial);
+            createStrings();
+
+            setupInputs();
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+        }
+
+        function createStand() {
+            standGroup = new THREE.Group();
+            const standMat = new THREE.MeshStandardMaterial({ color: 0xD2B48C, roughness: 0.8 });
+
+            const base = new THREE.Mesh(new THREE.BoxGeometry(14, 1, 10), standMat);
+            base.position.set(0, -12, 0);
+            base.receiveShadow = true;
+            standGroup.add(base);
+
+            const post = new THREE.Mesh(new THREE.BoxGeometry(4, 14, 2), standMat);
+            post.position.set(0, -6, -2);
+            post.receiveShadow = true;
+            standGroup.add(post);
+
+            const axle = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 3, 16), standMat);
+            axle.rotation.x = Math.PI / 2;
+            axle.position.set(0, 0, -1);
+            standGroup.add(axle);
+
+            scene.add(standGroup);
+        }
+
+        function createBoard(woodMaterial, glassMaterial) {
+            boardGroup = new THREE.Group();
+            const boardRadius = 11;
+
+            // Wood Texture (Procedural-ish color)
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0xE3C099, roughness: 0.6 });
+
+            const floorMesh = new THREE.Mesh(new THREE.CylinderGeometry(boardRadius, boardRadius, 0.5, 64), floorMat);
+            floorMesh.rotation.x = Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            floorMesh.castShadow = true;
+            boardGroup.add(floorMesh);
+
+            boardBody = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, material: woodMaterial });
+            const floorShape = new CANNON.Cylinder(boardRadius, boardRadius, 0.5, 32);
+            const quat = new CANNON.Quaternion();
+            quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+            boardBody.addShape(floorShape, new CANNON.Vec3(0, 0, 0), quat);
+
+            const glassShape = new CANNON.Box(new CANNON.Vec3(12, 12, 0.1));
+            boardBody.addShape(glassShape, new CANNON.Vec3(0, 0, 1.5));
+
+            createRing(boardRadius - 0.5, boardRadius, 0, 360, 1.5, boardGroup, boardBody);
+
+            // Ears
+            const earGeo = new THREE.CylinderGeometry(1, 1, 0.5, 16);
+            const earMat = new THREE.MeshStandardMaterial({ color: 0xE3C099 });
+            const earPositions = [[boardRadius, 0], [-boardRadius, 0], [0, boardRadius], [0, -boardRadius]];
+
+            earPositions.forEach((pos) => {
+                const ear = new THREE.Mesh(earGeo, earMat);
+                ear.rotation.x = Math.PI / 2;
+                ear.position.set(pos[0], pos[1], 0);
+                boardGroup.add(ear);
+
+                const hook = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 8, 16), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+                hook.position.z = 0.3;
+                ear.add(hook);
+            });
+
+            mazeDesign.forEach(ring => {
+                createWallArc(ring[0], ring[1] + ring[2], ring[1] + 360, boardGroup, boardBody);
+            });
+
+            const goalMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 32), new THREE.MeshStandardMaterial({ color: 0xFF595E }));
+            goalMesh.rotation.x = Math.PI / 2;
+            goalMesh.position.z = 0.26;
+            boardGroup.add(goalMesh);
+            scene.add(boardGroup);
+            world.addBody(boardBody);
+        }
+
+        function createWallArc(radius, startAngle, endAngle, group, body) {
+            const thickness = 0.3;
+            const height = 1.0;
+            const segments = 40;
+            const startRad = THREE.MathUtils.degToRad(startAngle);
+            const endRad = THREE.MathUtils.degToRad(endAngle);
+            const totalAngle = endRad - startRad;
+            const step = totalAngle / segments;
+            const boxW = (2 * Math.PI * radius) * (step / (2 * Math.PI)) + 0.1;
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
+
+            for (let i = 0; i < segments; i++) {
+                const angle = startRad + (step * i) + (step / 2);
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const geo = new THREE.BoxGeometry(boxW, thickness, height);
+                const mesh = new THREE.Mesh(geo, wallMat);
+                mesh.position.set(x, y, height / 2);
+                mesh.rotation.z = angle + Math.PI / 2;
+                mesh.castShadow = true;
+                group.add(mesh);
+
+                const shape = new CANNON.Box(new CANNON.Vec3(boxW / 2, thickness / 2, height / 2));
+                const q = new CANNON.Quaternion();
+                q.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), angle + Math.PI / 2);
+                body.addShape(shape, new CANNON.Vec3(x, y, height / 2), q);
+            }
+        }
+
+        function createRing(innerR, outerR, startDeg, endDeg, height, group, body) {
+            createWallArc((innerR + outerR) / 2, startDeg, endDeg, group, body);
+        }
+
+        function createStrings() {
+            const stringMat = new THREE.LineBasicMaterial({ color: 0xFFFFFF, linewidth: 2 });
+            for (let i = 0; i < 4; i++) {
+                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), stringMat);
+                scene.add(line);
+                strings.push(line);
+            }
+        }
+
+        function updateStrings() {
+            const boardRadius = 11;
+            const earOffsets = [
+                new THREE.Vector3(boardRadius, 0, 0), new THREE.Vector3(-boardRadius, 0, 0),
+                new THREE.Vector3(0, boardRadius, 0), new THREE.Vector3(0, -boardRadius, 0)
+            ];
+            const anchors = [
+                new THREE.Vector3(6, -6, 0), new THREE.Vector3(-6, -6, 0),
+                new THREE.Vector3(6, -6, 0), new THREE.Vector3(-6, -6, 0)
+            ];
+
+            strings.forEach((line, i) => {
+                const earPos = earOffsets[i].clone().applyQuaternion(boardGroup.quaternion).add(boardGroup.position);
+                const pos = line.geometry.attributes.position.array;
+                pos[0] = earPos.x; pos[1] = earPos.y; pos[2] = earPos.z;
+                pos[3] = anchors[i].x; pos[4] = anchors[i].y; pos[5] = anchors[i].z;
+                line.geometry.attributes.position.needsUpdate = true;
+            });
+        }
+
+        function createBall(material) {
+            const radius = 0.5;
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.9, roughness: 0.1 }));
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+
+            ballBody = new CANNON.Body({
+                mass: 20, shape: new CANNON.Sphere(radius), material: material,
+                linearDamping: 0.1, angularDamping: 0.5
+            });
+            ballBody.position.set(9.5, 2, 2.5);
+            world.addBody(ballBody);
+        }
+
+        function setupInputs() {
+            const wheel = document.getElementById('steering-wheel');
+            let dragging = false;
+            let startAngle = 0;
+            let currentWheelRot = 0;
+
+            const getAngle = (x, y) => {
+                const rect = wheel.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                return Math.atan2(y - cy, x - cx);
+            };
+
+            const startDrag = (x, y) => {
+                dragging = true;
+                startAngle = getAngle(x, y) - currentWheelRot;
+            };
+
+            const moveDrag = (x, y) => {
+                if (!dragging) return;
+                const angle = getAngle(x, y);
+                currentWheelRot = angle - startAngle;
+                wheel.style.transform = `rotate(${currentWheelRot}rad)`;
+                targetRotation = currentWheelRot;
+            };
+
+            const endDrag = () => dragging = false;
+
+            wheel.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+            window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+            window.addEventListener('mouseup', endDrag);
+
+            wheel.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); });
+            window.addEventListener('touchmove', e => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+            window.addEventListener('touchend', endDrag);
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            isGameActive = true;
+            resetBall();
+        }
+
+        function restartGame() {
+            document.getElementById('win-screen').classList.add('hidden');
+            isGameActive = true;
+            resetBall();
+        }
+
+        function resetBall() {
+            ballBody.position.set(0, 9, 0.5);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+            currentRotation = 0;
+            targetRotation = 0;
+            document.getElementById('steering-wheel').style.transform = `rotate(0rad)`;
+        }
+
+        function checkWin() {
+            const dist = Math.sqrt(ballBody.position.x ** 2 + ballBody.position.y ** 2);
+            if (dist < 1.0 && isGameActive) {
+                isGameActive = false;
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                setTimeout(() => document.getElementById('win-screen').classList.remove('hidden'), 500);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (isGameActive) {
+                // Smooth rotation
+                currentRotation += (targetRotation - currentRotation) * 0.1;
+
+                boardBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), currentRotation);
+                boardGroup.position.copy(boardBody.position);
+                boardGroup.quaternion.copy(boardBody.quaternion);
+
+                world.step(1 / 60);
+                ballMesh.position.copy(ballBody.position);
+                ballMesh.quaternion.copy(ballBody.quaternion);
+
+                updateStrings();
+                checkWin();
+
+                if (ballBody.position.y < -20) resetBall();
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>
